@@ -5,17 +5,18 @@
 -- Engineer: (c) Rajesh Panicker  
 -- 
 -- Create Date: 09/22/2020 06:49:10 PM
--- Module Name: ALU
+-- Module Name: RV
 -- Project Name: CG3207 Project
 -- Target Devices: Nexys 4 / Basys 3
 -- Tool Versions: Vivado 2019.2
--- Description: RISC-V Processor ALU Module
+-- Description: RISC-V Processor Module
 -- 
 -- Dependencies: NIL
 -- 
 -- Revision:
 -- Revision 0.01 - File Created
--- Additional Comments: Interface and implementation can be modified.
+-- Additional Comments: The interface SHOULD NOT be modified (except making output reg) unless you modify Wrapper.v/vhd too. 
+                        The implementation can be modified.
 -- 
 ----------------------------------------------------------------------------------
 
@@ -31,67 +32,176 @@
 ----------------------------------------------------------------------------------
 */
 
-module ALU(
-	input [31:0] Src_A,
-	input [31:0] Src_B,
-	input [3:0] ALUControl, // 0000 for add, 0001 for sub, 1110 for and, 1100 for or, 0010 for sll, 1010 for srl, 1011 for sra.
-	output reg [31:0] ALUResult,
-	output [2:0] ALUFlags //{eq, lt, ltu}
+// Change wire to reg if assigned inside a procedural (always) block. However, where it is easy enough, use assign instead of always.
+// A 2-1 multiplexing can be done easily using an assign with a ternary operator
+// For multiplexing with number of inputs > 2, a case construct within an always block is a natural fit. DO NOT to use nested ternary assignment operator as it hampers the readability of your code.
+
+
+module RV #(
+    parameter PC_INIT = 32'h00400000
+)(
+    input CLK,
+    input RESET,
+    //input Interrupt,      // for optional future use.
+    input [31:0] Instr,
+    input [31:0] ReadData_in,       // Name mangled to support lb/lbu/lh/lhu
+    output MemRead,
+    output [3:0] MemWrite_out,		// Column-wise write enable to support sb/sw. Each column is a byte.
+    output [31:0] PC,
+    output [31:0] ALUResult,
+    output [31:0] WriteData_out		// Name mangled to support sb/sw
 );
     
-	// Shifter signals
-	wire [1:0] Sh ;
-	wire [4:0] Shamt5 ;
-	wire [31:0] ShIn ;
-	wire [31:0] ShOut ;
-	
-	// Other signals
-	wire [32:0] S_wider ;
-	reg [32:0] Src_A_comp ;
-	reg [32:0] Src_B_comp ;
-	reg [32:0] C_0 ;
-	wire N, Z, C, V; 	// optional intermediate values to derive eq, lt, ltu
-				// Hint: We need to care about V only for subtraction
-	
-	assign S_wider = Src_A_comp + Src_B_comp + C_0 ;
+    // Please read Lab 4 Enhancement: Implementing additional instructions on how to support lb/lbu/lh/lhu/sb/sh
+        
+    //RV Signals
+    wire [2:0] SizeSel;     //to support lb/lbu/lh/lhu/sb/sh
+    wire [31:0] ReadData;
+    wire [31:0] WriteData;
+    wire MemWrite;
+
+    // The signals that are commented out (except CLK) will need to be uncommented and attached a stage suffix for pipelining,
+    //  except if the connection is within the same stage.
+
+    // RegFile signals
+    //wire CLK ;
+    wire WE ;
+    wire [4:0] rs1 ;
+    wire [4:0] rs2 ;
+    wire [4:0] rd ;
+    wire [31:0] WD ;
+    wire [31:0] R15 ;
+    wire [31:0] RD1 ;
+    wire [31:0] RD2 ;
     
-	always@(Src_A, Src_B, ALUControl, S_wider, ShOut) begin
-        // default values; help avoid latches
-		C_0 = 0 ; 
-		Src_A_comp = {1'b0, Src_A} ;
-		Src_B_comp = {1'b0, Src_B} ;
+    // Extend Module signals
+    wire [2:0] ImmSrc ;
+    wire [24:0] InstrImm ;
+    wire [31:0] ExtImm ;
     
-		case(ALUControl)
-			4'b0000: ALUResult = S_wider[31:0] ;	//add          
-	            	4'b0001: begin				//sub
-				C_0[0] = 1 ;  
-				Src_B_comp = {1'b0, ~ Src_B} ;
-				ALUResult = S_wider[31:0] ;
-			end
-	            	4'b1110: ALUResult = Src_A & Src_B ;	// and
-	            	4'b1100: ALUResult = Src_A | Src_B ; 	// or
-	            
-			// include cases for shifts		// shifts
-			default: ALUResult = 32'bx;
-	        endcase
-	    end
+    // Decoder signals
+    wire [6:0] Opcode ;
+    wire [2:0] Funct3 ;
+    wire [6:0] Funct7 ;
+    wire [1:0] PCS ;
+    wire RegWrite ;
+    wire MemWrite ;
+    wire MemtoReg ;
+    wire [1:0] ALUSrcA ;
+    wire [1:0] ALUSrcB ;
+    wire [2:0] ImmSrc ;
+    wire [3:0] ALUControl ;
+
+    // PC_Logic signals
+    //wire [1:0] PCS
+    //wire [2:0] Funct3;
+    //wire [2:0] ALUFlags;
+    wire [1:0] PCSrc;
       
-	assign Z = (ALUResult == 0) ? 1 : 0 ;
+    // ALU signals
+    reg [31:0] Src_A ;
+    reg [31:0] Src_B ;
+    //wire [3:0] ALUControl ;
+    //wire [31:0] ALUResult ;
+    wire [2:0] ALUFlags ;
     
-	assign ALUFlags = {Z, 1'b0, 1'b0} ; 	//{eq, lt, ltu} - all except eq are placeholders. 
-    						// todo: Will need to be modified in lab 3 to support blt, bltu, bge, bgeu.
+    // ProgramCounter signals
+    //wire CLK ;
+    //wire RESET ;
+    wire WE_PC ;    
+    wire [31:0] PC_IN ;
+//    wire [31:0] PC ; 
+        
+    // Other internal signals here
+    wire [31:0] PC_Offset ;
+    wire [31:0] Result ;
     
+    assign MemRead = MemtoReg; // This is needed for the proper functionality of some devices such as UART CONSOLE
+    assign WE_PC = 1 ;  // Will need to control it for multi-cycle operations (Multiplication, Division) and/or Pipelining with hazard hardware.
+
+    assign ReadData = ReadData_in;       // Change datapath as appropriate if supporting lb/lbu/lh/lhu
+    assign WriteData_out = WriteData;    // Change datapath as appropriate if supporting sb/sh
+    assign MemWrite_out = {4{MemWrite}}; // Change datapath as appropriate if supporting sb/sh
+    assign SizeSel = 3'b010;             // Change this to be generated by the Decoder (control) as appropriate if 
+                                         // supporting lb/sb/lbu/lh/sh/lhu/lw/sw. Hint: funct3
+
+    // todo: other datapath connections here
     
-	// todo: make shifter connections here
-	// Sh signals can be derived directly from the appropriate ALUControl bits
+    // Src_A mux
+    always @ (*) begin
+        case (ALUSrcA)
+            2'b01: Src_A = 32'd0;
+            2'b11: Src_A = PC;
+            default: Src_A = RD1;
+        endcase
+    end
     
+    // Src_B mux
+    always @ (*) begin
+        case (ALUSrcB)
+            2'b01: Src_B = 32'd4;
+            2'b11: Src_B = ExtImm;
+            default: Src_B = RD2;
+        endcase
+    end
+	
+    // Instantiate RegFile
+    RegFile RegFile1( 
+                    CLK,
+                    WE,
+                    rs1,
+                    rs2,
+                    rd,
+                    WD,
+                    RD1,
+                    RD2     
+                );
+                
+     // Instantiate Extend Module
+    Extend Extend1(
+                    ImmSrc,
+                    InstrImm,
+                    ExtImm
+                );
+                
+    // Instantiate Decoder
+    Decoder Decoder1(
+                    Opcode,
+                    Funct3,
+                    Funct7,
+                    PCS,
+                    RegWrite,
+                    MemWrite,
+                    MemtoReg,
+                    ALUSrcA,
+                    ALUSrcB,
+                    ImmSrc,
+                    ALUControl
+                );
+                
+    // Instantiate PC_Logic
+	PC_Logic PC_Logic1(
+                    PCS,
+                    Funct3,
+                    ALUFlags,
+                    PCSrc
+		);
+                
+    // Instantiate ALU        
+    ALU ALU1(
+                    Src_A,
+                    Src_B,
+                    ALUControl,
+                    ALUResult,
+                    ALUFlags
+                );                
     
-	// Instantiate Shifter        
-	Shifter Shifter1(
-                Sh,
-        	Shamt5,
-        	ShIn,
-        	ShOut
-        );
-     
+    // Instantiate ProgramCounter    
+    ProgramCounter #(.PC_INIT(PC_INIT)) ProgramCounter1(
+                    CLK,
+                    RESET,
+                    WE_PC,    
+                    PC_IN,
+                    PC  
+                );                         
 endmodule
