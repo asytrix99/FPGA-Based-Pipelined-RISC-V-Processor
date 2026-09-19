@@ -84,7 +84,7 @@ Do not work directly on `main` or `develop`.
 Before starting your work, update `develop`:
 
 ```bash
-git checkout asst1 
+git checkout asst2 
 git pull
 ```
 
@@ -116,7 +116,7 @@ Then create a Pull Request on GitHub:
 feature/uart
      |
      v
-   asst1 
+   asst2 
 ```
 
 Do **not** create the Pull Request directly into `main`.
@@ -126,15 +126,15 @@ Do **not** create the Pull Request directly into `main`.
 Individual features are merged into:
 
 ```text
-feature/* ── PR ──> asst1
+feature/* ── PR ──> asst2
 ```
 
-The `asst1` branch is used to integrate and test everyone's work.
+The `asst2` branch is used to integrate and test everyone's work.
 
 Once the complete FPGA design has been tested and is ready:
 
 ```text
-asst1 ── PR ──> main
+asst2 ── PR ──> main
 ```
 
 `main` should therefore contain the stable version of the project.
@@ -147,7 +147,7 @@ main
   |
   | Final PR
   |
-asst1
+asst2
   ^
   |
   +---- feature/module-a
@@ -160,9 +160,9 @@ asst1
 ## Important Rules
 
 - Do not push directly to `main`.
-- Do not push directly to `asst1`.
+- Do not push directly to `asst2`.
 - Create a separate branch for your work.
-- Create a Pull Request into `asst1` when your work is ready.
+- Create a Pull Request into `asst2` when your work is ready.
 - Do not commit Vivado-generated project files.
 - Only commit source files, constraints, and other files required by the team.
 - Make sure your design works in Vivado before creating a Pull Request.
