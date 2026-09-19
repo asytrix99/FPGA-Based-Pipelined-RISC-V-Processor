@@ -96,7 +96,7 @@ module RV #(
     //wire [1:0] PCS
     //wire [2:0] Funct3;
     //wire [2:0] ALUFlags;
-    wire PCSrc;
+    wire [1:0] PCSrc;
       
     // ALU signals
     wire [31:0] Src_A ;
