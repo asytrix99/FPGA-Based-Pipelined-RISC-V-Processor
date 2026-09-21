@@ -40,10 +40,10 @@ module ALU(
 );
     
 	// Shifter signals
-	wire [1:0] Sh ;
-	wire [4:0] Shamt5 ;
-	wire [31:0] ShIn ;
-	wire [31:0] ShOut ;
+	reg [1:0] Sh ;
+	reg [4:0] Shamt5 ;
+	reg [31:0] ShIn ;
+	reg [31:0] ShOut ;
 	
 	// Other signals
 	wire [32:0] S_wider ;
@@ -60,25 +60,45 @@ module ALU(
 		C_0 = 0 ; 
 		Src_A_comp = {1'b0, Src_A} ;
 		Src_B_comp = {1'b0, Src_B} ;
+		ShIn = Src_A;
+		Shamt5 = Src_B[4:0];
+		Sh = 2'b00;
     
 		case(ALUControl)
-			4'b0000: ALUResult = S_wider[31:0] ;	//add          
-	            	4'b0001: begin				//sub
+			4'b0000: ALUResult = S_wider[31:0] ;	//add
+			4'b0001: begin				//sub
 				C_0[0] = 1 ;  
 				Src_B_comp = {1'b0, ~ Src_B} ;
 				ALUResult = S_wider[31:0] ;
 			end
-	            	4'b1110: ALUResult = Src_A & Src_B ;	// and
-	            	4'b1100: ALUResult = Src_A | Src_B ; 	// or
-	            
+			4'b1110: ALUResult = Src_A & Src_B ;	// and
+            4'b1100: ALUResult = Src_A | Src_B ; 	// or
+            
+            4'b0010: begin Sh = 2'b00; ALUResult = ShOut; end // sll
+            4'b1010: begin Sh = 2'b10; ALUResult = ShOut; end // srl
+            4'b1011: begin Sh = 2'b11; ALUResult = ShOut; end // sra
+            
+            4'b1000: ALUResult = Src_A ^ Src_B; // xor
+            4'b0100: ALUResult = ($signed(Src_A) < $signed(Src_B)) ? 32'd1 : 32'd0; // slt
+            4'b0110: ALUResult = (Src_A < Src_B) ? 32'd1 : 32'd0; // sltu
+            
 			// include cases for shifts		// shifts
 			default: ALUResult = 32'bx;
 	        endcase
 	    end
       
 	assign Z = (ALUResult == 0) ? 1 : 0 ;
+	
+	assign C = S_wider[32]; // for all A-B >= 0 (unsigned)
+	assign N = ALUResult[31]; // for A-B < 0
+	assign V = (Src_A[31] ^ Src_A[31]) & (Src_A[31] ^ ALUResult[31]); // for overflow wrap around
+	
+	// case 1: N=1, V=0 -> A-B < 0, no overflow
+	// case 2: N=0, V=1 -> INT_MIN-1 > 0 1 (non-negative), overflow
+	wire lt = N ^ V;
+	wire ltu = ~C; // for all A < B (unsigned)
     
-	assign ALUFlags = {Z, 1'b0, 1'b0} ; 	//{eq, lt, ltu} - all except eq are placeholders. 
+	assign ALUFlags = {Z, lt, ltu} ; 	//{eq, lt, ltu} - all except eq are placeholders. 
     						// todo: Will need to be modified in lab 3 to support blt, bltu, bge, bgeu.
     
     
@@ -88,7 +108,7 @@ module ALU(
     
 	// Instantiate Shifter        
 	Shifter Shifter1(
-                Sh,
+            Sh,
         	Shamt5,
         	ShIn,
         	ShOut
