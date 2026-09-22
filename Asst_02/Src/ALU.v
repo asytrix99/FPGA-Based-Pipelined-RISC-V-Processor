@@ -43,7 +43,7 @@ module ALU(
 	reg [1:0] Sh ;
 	reg [4:0] Shamt5 ;
 	reg [31:0] ShIn ;
-	reg [31:0] ShOut ;
+	wire [31:0] ShOut ;
 	
 	// Other signals
 	wire [32:0] S_wider ;
