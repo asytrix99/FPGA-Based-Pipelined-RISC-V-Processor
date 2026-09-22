@@ -101,6 +101,14 @@ module Decoder(
                      // PCS stays default for non-control (non-B, non-J types)
                 end
                 
+                OP_LOAD: begin
+                    RegWrite = 1'b1;
+                    MemtoReg = 1'b1;
+                    ALUSrcB = 2'b11; // ExtImm
+                    // ImmSrc stays default (I-type)   
+                    // PCS stay default for non-control (non-B, non-J types)
+                end
+                
                 OP_STORE: begin
                     MemWrite = 1'b1;
                     ALUSrcB = 2'b11; // ExtImm
@@ -130,7 +138,15 @@ module Decoder(
                     ALUSrcA = 2'b01; // 0
                     ALUSrcB = 2'b11; // ExtImm
                     ImmSrc = 3'b000; // U-type
-                    // ALUControl stays default (add)
+                    // ALUControl stays default (add) -> 0 + ExtImm
+                end
+                
+                OP_AUIPC: begin
+                    RegWrite = 1'b1;
+                    ALUSrcA = 2'b11; // PC
+                    ALUSrcB = 2'b11; // ExtImm
+                    ImmSrc = 3'b000; // U-type
+                    // ALUControl stays default (add) -> PC + ExtImm
                 end
                 
                 OP_JALR: begin
