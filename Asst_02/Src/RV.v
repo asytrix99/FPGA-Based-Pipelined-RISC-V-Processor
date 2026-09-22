@@ -55,69 +55,69 @@ module RV #(
     // Please read Lab 4 Enhancement: Implementing additional instructions on how to support lb/lbu/lh/lhu/sb/sh
         
     //RV Signals
-    wire [2:0] SizeSel;     //to support lb/lbu/lh/lhu/sb/sh
+    wire [2:0] SizeSel;                 //to support lb/lbu/lh/lhu/sb/sh
     wire [31:0] ReadData;
-    wire [31:0] WriteData;
-    wire MemWrite;
+    wire [31:0] WriteData;              // Instantiated by assign below
+    wire MemWrite;                      // Instantiated by decoder
 
     // The signals that are commented out (except CLK) will need to be uncommented and attached a stage suffix for pipelining,
     //  except if the connection is within the same stage.
 
     // RegFile signals
     //wire CLK ;
-    wire WE ;
-    wire [4:0] rs1 ;
-    wire [4:0] rs2 ;
-    wire [4:0] rd ;
-    wire [31:0] WD ;
-    wire [31:0] R15 ;
-    wire [31:0] RD1 ;
-    wire [31:0] RD2 ;
+    wire WE ;                           // Instantiated by assign below
+    wire [4:0] rs1 ;                    // Instantiated by assign below
+    wire [4:0] rs2 ;                    // Instantiated by assign below
+    wire [4:0] rd ;                     // Instantiated by assign below
+    wire [31:0] WD ;                    // Instantiated by assign below
+    wire [31:0] R15 ;                   // ????
+    wire [31:0] RD1 ;                   // Instantiated by RegFile
+    wire [31:0] RD2 ;                   // Instantiated by RegFile
     
     // Extend Module signals
-    wire [2:0] ImmSrc ;
-    wire [24:0] InstrImm ;
-    wire [31:0] ExtImm ;
+    wire [2:0] ImmSrc ;                 // Instantiated by decoder
+    wire [24:0] InstrImm ;              // Instantiated by assign below
+    wire [31:0] ExtImm ;                // Instantiated by Extend
     
     // Decoder signals
-    wire [6:0] Opcode ;
-    wire [2:0] Funct3 ;
-    wire [6:0] Funct7 ;
-    wire [1:0] PCS ;
-    wire RegWrite ;
+    wire [6:0] Opcode ;                 // Instantiated by assign below
+    wire [2:0] Funct3 ;                 // Instantiated by assign below
+    wire [6:0] Funct7 ;                 // Instantiated by assign below
+    wire [1:0] PCS;                     // Instantiated by decoder
+    wire RegWrite ;                     // Instantiated by decoder
     //wire MemWrite ;
-    wire MemtoReg ;
-    //wire [1:0] ALUSrcA ;
-    wire ALUSrcB ;
+    wire MemtoReg ;                     // Instantiated by decoder
+    wire [1:0] ALUSrcA ;                // Instantiated by decoder
+    wire [1:0] ALUSrcB ;                // Instantiated by decoder
     //wire [2:0] ImmSrc ;
-    wire [3:0] ALUControl ;
+    wire [3:0] ALUControl ;             // Instantiated by decoder
 
     // PC_Logic signals
     //wire [1:0] PCS
     //wire [2:0] Funct3;
     //wire [2:0] ALUFlags;
-    wire [1:0] PCSrc;
+    wire [1:0] PCSrc;                   // Instantiated by PC_Logic
       
     // ALU signals
-    wire [31:0] Src_A ;
-    wire [31:0] Src_B ;
+    reg [31:0] Src_A ;                 // Instantiated in the alway loop
+    reg [31:0] Src_B ;                 // Instantiated in the alway loop
     //wire [3:0] ALUControl ;
     //wire [31:0] ALUResult ;
-    wire [2:0] ALUFlags ;
+    wire [2:0] ALUFlags;                // Instantiated by PC_Logic
     
     // ProgramCounter signals
     //wire CLK ;
     //wire RESET ;
     wire WE_PC ;    
-    wire [31:0] PC_IN ;
+    reg [31:0] PC_IN ;                  // Instantiated in the alway loop
     //wire [31:0] PC ; 
         
     // Other internal signals here
-    wire [31:0] PC_Offset ;
-    wire [31:0] Result ;
+    wire [31:0] PC_Offset ;              
+    wire [31:0] Result ;                 // Instantiated by assign below
     
-    assign MemRead = MemtoReg; // This is needed for the proper functionality of some devices such as UART CONSOLE
-    assign WE_PC = 1 ;  // Will need to control it for multi-cycle operations (Multiplication, Division) and/or Pipelining with hazard hardware.
+    assign MemRead = MemtoReg;           // This is needed for the proper functionality of some devices such as UART CONSOLE
+    assign WE_PC = 1 ;                   // Will need to control it for multi-cycle operations (Multiplication, Division) and/or Pipelining with hazard hardware.
 
     assign ReadData = ReadData_in;       // Change datapath as appropriate if supporting lb/lbu/lh/lhu
     assign WriteData_out = WriteData;    // Change datapath as appropriate if supporting sb/sh
@@ -126,7 +126,57 @@ module RV #(
                                          // supporting lb/sb/lbu/lh/sh/lhu/lw/sw. Hint: funct3
 
     // todo: other datapath connections here
-	
+    assign WriteData = RD2;
+    
+    assign WE = RegWrite;
+    assign rs1 = Instr[19:15];
+    assign rs2 = Instr[24:20];
+    assign rd  = Instr[11:7];
+    assign WD = Result;
+
+    assign InstrImm = Instr[31:7];
+    
+    assign Opcode = Instr[6:0];
+    assign Funct3 = Instr[14:12];
+    assign Funct7 = Instr[31:25];
+    
+    assign Result = MemtoReg ? ReadData : ALUResult;
+    assign PC_Offset = PC + ExtImm;
+    
+    // Instantiate Src_A
+    always @(*) 
+    begin
+        casez (ALUSrcA)
+            2'b?0 : Src_A = RD1;
+            2'b01 : Src_A = 32'b0;
+            2'b11 : Src_A = PC;
+            default: Src_A = RD1;
+        endcase
+    end
+    
+    // Instantiate Src_B
+    always @(*) 
+    begin
+        casez (ALUSrcB)
+            2'b?0 : Src_B = RD2;
+            2'b01 : Src_B = 32'b100;
+            2'b11 : Src_B = ExtImm;
+            default: Src_B = RD2;
+        endcase
+    end
+    
+    // Instantiate PC_IN
+	always @(*)
+	begin
+        case (PCSrc) 
+            2'b00: PC_IN = PC + 32'b100;
+            2'b01: PC_IN = PC_Offset;
+            2'b11: PC_IN = RD1 + ExtImm;
+            default: PC_IN = PC + 32'b100;
+        endcase	
+	end
+
+
     // Instantiate RegFile
     RegFile RegFile1( 
                     CLK,
@@ -155,7 +205,7 @@ module RV #(
                     RegWrite,
                     MemWrite,
                     MemtoReg,
-                    //ALUSrcA,
+                    ALUSrcA,
                     ALUSrcB,
                     ImmSrc,
                     ALUControl
