@@ -93,37 +93,38 @@ module tb_ALU(
     initial begin
 
         // ALUResult
+        
+        check_result("add basic", 32'd5, 32'd3, 4'b0000, 32'd8); // add
+        check_result("add wraparound", 32'hFFFFFFFF, 32'd1, 4'b0000, 32'd0); // add unsigned overflow wraps to 0
 
-        // add
-        check_result("add basic", 32'd5, 32'd3, 4'b0000, 32'd8);
-        check_result("add wraparound", 32'hFFFFFFFF, 32'd1, 4'b0000, 32'd0); // unsigned overflow wraps to 0
-        // sub
-        check_result("sub basic", 32'd5, 32'd3, 4'b0001, 32'd2); // 5 - 3 = 2
-        check_result("sub negative", 32'd3, 32'd5, 4'b0001, 32'hFFFFFFFE); // 3 - 5 = -2 
-        check_result("sub equal", 32'd10, 32'd10, 4'b0001, 32'd0); // 10 - 10 = 0
-        // and
-        check_result("and", 32'hF0F0F0F0, 32'h0F0F0F0F, 4'b1110, 32'h00000000);
-        // or
-        check_result("or", 32'hF0F0F0F0, 32'h0F0F0F0F, 4'b1100, 32'hFFFFFFFF);
-        // xor
-        check_result("xor", 32'hFF00FF00, 32'h00FF00FF, 4'b1000, 32'hFFFFFFFF);
-        // sll
-        check_result("sll", 32'h00000001, 32'd3, 4'b0010, 32'h00000008); // 1 << 3 = 8
-        // srl
-        check_result("srl", 32'h80000000, 32'd4, 4'b1010, 32'h08000000);
-        // sra
-        check_result("sra", 32'h80000000, 32'd4, 4'b1011, 32'hF8000000);
-        // slt
-        check_result("slt (-1 < 1)", 32'hFFFFFFFF, 32'd1, 4'b0100, 32'd1); // signed: -1 < 1 -> return 1
-        check_result("slt (1 < -1)", 32'd1, 32'hFFFFFFFF, 4'b0100, 32'd0); // signed: 1 < -1 -> return 0
-        // sltu
-        check_result("sltu (big < 1)", 32'hFFFFFFFF, 32'd1, 4'b0110, 32'd0); // unsigned: huge < 1 -> return 0
-        check_result("sltu (1 < big)", 32'd1, 32'hFFFFFFFF, 4'b0110, 32'd1); // unsigned: 1 < huge -> return 1
+        check_result("sub basic", 32'd5, 32'd3, 4'b0001, 32'd2); // sub: 5 - 3 = 2
+        check_result("sub negative", 32'd3, 32'd5, 4'b0001, 32'hFFFFFFFE); // sub: 3 - 5 = -2 
+        check_result("sub equal", 32'd10, 32'd10, 4'b0001, 32'd0); // sub: 10 - 10 = 0
+     
+        check_result("and", 32'hF0F0F0F0, 32'h0F0F0F0F, 4'b1110, 32'h00000000); // add
+     
+        check_result("or", 32'hF0F0F0F0, 32'h0F0F0F0F, 4'b1100, 32'hFFFFFFFF); // or
+        
+        check_result("xor", 32'hFF00FF00, 32'h00FF00FF, 4'b1000, 32'hFFFFFFFF); // xor
+        
+        check_result("sll, shmat=3", 32'h00000001, 32'd3, 4'b0010, 32'h00000008); // sll: 1 << 3 = 8
+        check_result("srl, shamt=4", 32'h80000000, 32'd4, 4'b1010, 32'h08000000); //srl: shift right logical, fills with 0
+        check_result("sra, shamt=4", 32'h80000000, 32'd4, 4'b1011, 32'hF8000000); // sra shift right arithmetic, fills with sign bit
+        
+        check_result("sll shamt=0", 32'hDEADBEEF, 32'd0, 4'b0010, 32'hDEADBEEF); // no shift
+        check_result("srl shamt=31", 32'h80000000, 32'd31, 4'b1010, 32'h00000001); // sign-fill all the way
+        check_result("sra shamt=31", 32'h80000000, 32'd31, 4'b1011, 32'hFFFFFFFF); // sign-fill all the way
+        
+        check_result("slt (-1 < 1)", 32'hFFFFFFFF, 32'd1, 4'b0100, 32'd1); // slt signed: -1 < 1 -> return 1
+        check_result("slt (1 < -1)", 32'd1, 32'hFFFFFFFF, 4'b0100, 32'd0); // slt signed: 1 < -1 -> return 0
+        check_result("sltu (big < 1)", 32'hFFFFFFFF, 32'd1, 4'b0110, 32'd0); // sltu unsigned: huge < 1 -> return 0
+        check_result("sltu (1 < big)", 32'd1, 32'hFFFFFFFF, 4'b0110, 32'd1); // sltu unsigned: 1 < huge -> return 1
 
         // ALUFlags
         check_flags("5 vs 3", 32'd5, 32'd3, 1'b0, 1'b0, 1'b0); // A > B
         check_flags("3 vs 5", 32'd3, 32'd5, 1'b0, 1'b1, 1'b1); // A < B
         check_flags("10 vs 10", 32'd10, 32'd10, 1'b1, 1'b0, 1'b0); // A == B
+        
         // ref Decoder.v case 2 -> INT_MIN - 1: N=0, V=1 -> A-B = INT_MIN-1 > 0 -> overflow
         check_flags("INT_MIN vs 1", 32'h80000000, 32'd1, 1'b0, 1'b1, 1'b0);
         // normal A < B returns 1 so uses unsigned version
