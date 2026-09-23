@@ -91,7 +91,7 @@ module ALU(
 	
 	assign C = S_wider[32]; // for all A-B >= 0 (unsigned)
 	assign N = ALUResult[31]; // for A-B < 0
-	assign V = (Src_A[31] ^ Src_A[31]) & (Src_A[31] ^ ALUResult[31]); // for overflow wrap around
+	assign V = (Src_A[31] ^ Src_B[31]) & (Src_A[31] ^ ALUResult[31]); // for overflow wrap around
 	
 	// case 1: N=1, V=0 -> A-B < 0, no overflow
 	// case 2: N=0, V=1 -> INT_MIN-1 > 0 1 (non-negative), overflow
