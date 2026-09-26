@@ -171,7 +171,7 @@ module RV #(
         case (PCSrc) 
             2'b00: PC_IN = PC + 32'b100;
             2'b01: PC_IN = PC_Offset;
-            2'b11: PC_IN = RD1 + ExtImm;
+            2'b11: PC_IN = (RD1 + ExtImm) & 32'hFFFFFFFE;
             default: PC_IN = PC + 32'b100;
         endcase	
 	end
