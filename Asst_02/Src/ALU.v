@@ -65,14 +65,14 @@ module ALU(
 		Sh = 2'b00;
     
 		case(ALUControl)
-			4'b0000: ALUResult = S_wider[31:0] ;	//add
-			4'b0001: begin				//sub
+			4'b0000: ALUResult = S_wider[31:0]; // add
+			4'b0001: begin // sub
 				C_0[0] = 1 ;  
 				Src_B_comp = {1'b0, ~ Src_B} ;
 				ALUResult = S_wider[31:0] ;
 			end
-			4'b1110: ALUResult = Src_A & Src_B ;	// and
-            4'b1100: ALUResult = Src_A | Src_B ; 	// or
+			4'b1110: ALUResult = Src_A & Src_B; // and
+            4'b1100: ALUResult = Src_A | Src_B; // or
             
             4'b0010: begin Sh = 2'b00; ALUResult = ShOut; end // sll
             4'b1010: begin Sh = 2'b10; ALUResult = ShOut; end // srl
@@ -82,7 +82,7 @@ module ALU(
             4'b0100: ALUResult = ($signed(Src_A) < $signed(Src_B)) ? 32'd1 : 32'd0; // slt
             4'b0110: ALUResult = (Src_A < Src_B) ? 32'd1 : 32'd0; // sltu
             
-			// include cases for shifts		// shifts
+			// include cases for shifts
 			default: ALUResult = 32'bx;
 	        endcase
 	    end
@@ -91,21 +91,26 @@ module ALU(
 	
 	assign C = S_wider[32]; // for all A-B >= 0 (unsigned)
 	assign N = ALUResult[31]; // for A-B < 0
+	
+	// Src_A[31] ^ Src_B[31] considers only scenarios both signs different
+	//     scenario 1: A >= 0, B < 0: largest possible -> MAX - MIN = A - B = A + |B| = 2^32 - 1 (out of range)
+	//     scenario 2: A < 0, B >= 0: smallest possible -> MIN - MAX = A - B = -2^32 + 1 (out of range)
+	
+	// Src_A[31] ^ ALUResult[31] filters above XOR operation to whether overflow actually occurs
+	//     scenario 1 (A >= 0, B < 0) from above is used
+	//     no overflow -> magnitudes small enough within window -> ALUResult[31] = 0
+	//     overflow -> MAX - MIN = 2^32 - 1, wraps to positive -> ALUResult[31]
+	
 	assign V = (Src_A[31] ^ Src_B[31]) & (Src_A[31] ^ ALUResult[31]); // for overflow wrap around
 	
 	// case 1: N=1, V=0 -> A-B < 0, no overflow
-	// case 2: N=0, V=1 -> INT_MIN-1 > 0 1 (non-negative), overflow
+	// case 2: N=0, V=1 -> INT_MIN-1 > 0 (non-negative), overflow
 	wire lt = N ^ V;
 	wire ltu = ~C; // for all A < B (unsigned)
     
-	assign ALUFlags = {Z, lt, ltu} ; 	//{eq, lt, ltu} - all except eq are placeholders. 
-    						// todo: Will need to be modified in lab 3 to support blt, bltu, bge, bgeu.
-    
-    
-	// todo: make shifter connections here
-	// Sh signals can be derived directly from the appropriate ALUControl bits
-    
-    
+	assign ALUFlags = {Z, lt, ltu}; // differentiate branch types
+    // todo: Will need to be modified in lab 3 to support blt, bltu, bge, bgeu.
+
 	// Instantiate Shifter        
 	Shifter Shifter1(
             Sh,
