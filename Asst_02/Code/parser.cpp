@@ -21,7 +21,14 @@ struct TPacket {
     int32_t z_scaled;
 };
 
-uint32_t read_32_byte(const uint8_t* data)
+
+/**
+ * @brief Pack an arry of 4 bytes uint8_t data into a uint32_t data
+ *
+ * @param data      The array of uint8_t data to be packed
+ * @return uint32_t The package uint32_t value 
+ */ 
+uint32_t read_32_bit(const uint8_t* data)
 {
     return (static_cast<uint32_t>(data[0]) << 24) |
            (static_cast<uint32_t>(data[1]) << 16) |
@@ -30,6 +37,14 @@ uint32_t read_32_byte(const uint8_t* data)
 }
 
 
+/**
+ * @brief Compute the checksum of uint32_t data
+ *
+ * This function breaks the uint32_t data into 4 bytes and compute the checksum
+ *
+ * @param raw_data  The uint32_t data to be checked
+ * @return uint32_t The checksum value 
+ */ 
 uint32_t calculate_checksum(uint32_t raw_data)
 {
     uint32_t checksum =
@@ -42,17 +57,25 @@ uint32_t calculate_checksum(uint32_t raw_data)
     return checksum & 0xFF;
 }
 
-
+/**
+ * @brief Parse a raw byte buffer into a TPacket struture. Valide the values through checksum
+ *
+ * This function extract data from a fixed-size byte array and pack the raw bytes into a TPacket format
+ *
+ * @param buffer A fixed-size array contrainig all the raw bytes
+ * @param packet Reference to the TPacket to be populated
+ * @return true  If the magic byte is correct and checksum matches; false otherwise
+ */
 bool parse_packet(const std::array<uint8_t, PACKET_SIZE>& buffer, TPacket& packet) {
     if (buffer[0] != MAGIC) return false;
 
     packet.magic = buffer[0];
     packet.check_sum = buffer[1];
 
-    packet.raw_data = read_32_byte(&buffer[4]);
-    packet.x_scaled = read_32_byte(&buffer[8]);
-    packet.y_scaled = read_32_byte(&buffer[12]);
-    packet.z_scaled = read_32_byte(&buffer[16]);
+    packet.raw_data = read_32_bit(&buffer[4]);
+    packet.x_scaled = read_32_bit(&buffer[8]);
+    packet.y_scaled = read_32_bit(&buffer[12]);
+    packet.z_scaled = read_32_bit(&buffer[16]);
 
     uint32_t expected_checksum = calculate_checksum(packet.raw_data);
 
@@ -130,13 +153,34 @@ int open_serial_port(const char* device)
     return fd;
 }
 
-
+/**
+ * @brief Reads a single byte from UART file descripter
+ *
+ * @param fd    The open file descripter corresponding to the UART device
+ * @param byte  Reference to the uint8_t variable to be stored
+ * @return true if exactly one byte was read; false otherwise
+ */ 
 bool uart_read_byte(int fd, uint8_t& byte) {
     ssize_t res = read(fd, &byte, 1);
 
     return res == 1;
 }
 
+
+/**
+ * @brief Read a UART steam to receive and parse a valid TPacket
+ *
+ * This function reads continuously from the file descripter, searching for byte that match MAGIC byte.
+ * Any non-magic bytes encounted are assume to be ASCII charater and printed to standard output.
+ *
+ * When MAGIC btye is found, it reads the remanining PACKET_SIZE - 1 bytes into a buffer and parse it.
+ * If parsing fail, the buffer is discarded and resume hunting for MAGIC.
+ *
+ * @param fd     The open file descripter corresponding to the UART device
+ * @param packet Reference to the TPacket to be populated
+ * @return true  if a vlaide packet was successfully received and parsed;
+ *         false if read error occurs
+ */ 
 bool receive_packet(int fd, TPacket& packet) {
     std::array<uint8_t, PACKET_SIZE> buffer{};
 
@@ -167,6 +211,16 @@ bool receive_packet(int fd, TPacket& packet) {
     }
 }
 
+/**
+ * @brief Formats and prints the content of a TPacket to standard output
+ *
+ * This function display the magic byte, checksum and raw_data in hexadecimal format.
+ * It unpacks the 8-bit signed X, Y, Z raw accelerometer values embedded within the raw_date and
+ * output them in standard output. 
+ * It also output the scaled X, Y, Z value 
+ *
+ * @param packet Constant reference to the TPacket structure to be printed
+ */ 
 void print_packet(const TPacket& packet) {
     std::cout << std::endl << "Magic: 0x"
               << std::hex << std::uppercase

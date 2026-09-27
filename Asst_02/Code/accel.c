@@ -1,3 +1,6 @@
+// This code is made to be inefficient to force the compiler to use certain RISC-V instructions
+
+
 #define IROM_BASE 0x00400000		// Should be the same as the .txt address based on the Memory Configuration set in the assembler/linker, 
                                     // Wrapper.v and the PC default value as well as reset value in **ProgramCounter.v** 
 #define DMEM_BASE 0x10010000   	// Should be the same as the .data address based on the Memory Configuration set in the assembler/linker, and Wrapper.v
@@ -121,7 +124,6 @@ int main()
         int z_scaled = z_signed >> scale;
 
 
-
         unsigned int x_mag = (x_signed < 0) ? -x_signed : x_signed;
         unsigned int y_mag = (y_signed < 0) ? -y_signed : y_signed;
         unsigned int z_mag = (z_signed < 0) ? -z_signed : z_signed;
@@ -187,18 +189,39 @@ int main()
     return 0;
 }
 
+/**
+ * @brief Blocks execution for a specified number of hardware clock cycles
+ *
+ * @param cycles The number of clock cycles to delay
+ */
 void delay(unsigned int cycles)
 {
     unsigned int starting_count = *CYCLECOUNT_ADDR;
     while(*CYCLECOUNT_ADDR < starting_count + cycles);
 }
 
+
+/**
+ * @brief Transmit a single character over UART
+ *
+ * This function blocks until UART transmit is ready, and write the char to the transmit rigister
+ *
+ * @param c The character to be transmitted.
+ */ 
 void uart_send_char(unsigned int c)
 {
     while (!(*UART_TX_ready_ADDR));
     *UART_TX_ADDR = c;
 }
 
+
+/**
+ * @brief Transmit a single byte over UART
+ *
+ * This function clears all other bits other than the first 8 bits before writing to the transmit register.
+ *
+ * @param value The byte to be transmitted
+ */ 
 void uart_send_byte(unsigned int value) {
     volatile unsigned int mask = 0xFF;
     unsigned int tx_value = value & mask;
@@ -207,6 +230,11 @@ void uart_send_byte(unsigned int value) {
     *UART_TX_ADDR = tx_value;
 }
 
+/**
+ * @brief Transmit a hex value character over UART
+ *
+ * @param digit The desire digit to be converted to hex and send as a char
+ */ 
 void uart_send_hex_digit(unsigned int digit)
 {
     if (digit < 10)
@@ -215,12 +243,28 @@ void uart_send_hex_digit(unsigned int digit)
         uart_send_char('A' + digit - 10);
 }
 
+/**
+ * @brief Transmit a byte value over UART in hex representation
+ *
+ * This function breaks the byte into 2 4-bit value and send the required hex represntation through
+ * the function uart_send_hex_digit
+ *
+ * @param value The desire byte to be converted to hex and send over UART
+ */ 
 void uart_send_hex_byte(unsigned int value)
 {
     uart_send_hex_digit((value >> 4) & 0xF);
     uart_send_hex_digit(value & 0xF);
 }
 
+/**
+ * @brief Transmit a halfword value over UART in hex representation
+ *
+ * This function breaks the byte into 4 4-bit value and send the required hex represntation through
+ * the function uart_send_hex_digit
+ *
+ * @param value The desire halfword to be converted to hex and send over UART
+ */ 
 void uart_send_hex_halfword(unsigned int value)
 {
     uart_send_hex_digit((value >> 12) & 0xF);
@@ -229,6 +273,14 @@ void uart_send_hex_halfword(unsigned int value)
     uart_send_hex_digit(value & 0xF);
 }
 
+
+/**
+ * @brief Transmit a word value over UART in raw format
+ *
+ * This function break the word into 4 bytes and send the bytes over UART 
+ *
+ * @param value The desire word to be send over UART
+ */ 
 void uart_send_u32(unsigned int value) {
     volatile unsigned int shift24 = 24;
     volatile unsigned int shift16 = 16;
@@ -242,6 +294,13 @@ void uart_send_u32(unsigned int value) {
 }
 
 
+/**
+ * @brief Transmit a packet over UART
+ *
+ * This function unpacks the TPacket and send the TPacket byte by byte over UART 
+ *
+ * @param tpacket The desire packet to be send over UART
+ */ 
 void uart_send_packet(TPacket tpacket) {
     uart_send_byte(tpacket.magic);
     uart_send_byte(tpacket.check_sum);
@@ -255,6 +314,18 @@ void uart_send_packet(TPacket tpacket) {
     uart_send_u32((unsigned int)tpacket.z_scaled);
 }
 
+/**
+ * @brief Take raw accelerometer data and scaled reading into a TPacket
+ * 
+ * The function take in the 32-bit raw accel_reading, computes the checksum.
+ * It then pack all the required values into a TPacket format
+ *
+ * @param accel_reading The raw 32-bit accelerometer reading
+ * @param x_scaled      The scaled x reading 
+ * @param y_scaled      The scaled y reading
+ * @param z_scaled      The scaled z reading
+ * @return TPacket      The fully populated packet for transmittion
+ */ 
 TPacket make_packet(unsigned int accel_reading, int x_scaled, int y_scaled, int z_scaled) {
     TPacket tpacket = {0};
     tpacket.magic = MAGIC;
