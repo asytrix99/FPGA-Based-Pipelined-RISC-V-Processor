@@ -24,19 +24,38 @@
                                  // Not using ACCEL_DREADY_OFF as we poll at a low freq, should be ready
 
 void uart_send_char(unsigned int c);
-void uart_send_hex_word(unsigned int value);
+void uart_send_byte(unsigned int value);
+void uart_send_hex_halfword(unsigned int value);
 void uart_send_hex_byte(unsigned int value);
+void uart_send_u32(unsigned int value);
 void delay(unsigned int cycles);
 volatile unsigned int* CYCLECOUNT_ADDR = (unsigned int*) (MMIO_BASE+CYCLECOUNT_OFF); 
 volatile unsigned int* UART_TX_ready_ADDR = (unsigned int*) (MMIO_BASE+UART_TX_READY_OFF);
 volatile unsigned int* UART_TX_ADDR = (unsigned int*) (MMIO_BASE+UART_TX_OFF);
+
 // making CYCLECOUNT_ADDR global just to use data memory :)
+
+#define MAGIC 0x67
+
+typedef struct {
+    unsigned int magic;
+    unsigned int check_sum;
+    unsigned int raw_data;
+    int x_scaled;
+    int y_scaled;
+    int z_scaled;
+} TPacket;
+
+void uart_send_packet(TPacket tpacket);
+
+TPacket make_packet(unsigned int accel_reading, int x_scaled, int y_scaled, int z_scaled);
 
 int main()
 {
     asm volatile("li sp, %0" : : "i" (STACK_INIT)); //inline assembly to init sp. Registers cant be accessed explicitly in pure C
     volatile unsigned int* ACCEL_Data_ADDR = (unsigned int*) (MMIO_BASE+ACCEL_DATA_OFF); // temp, x, y, z
 
+    volatile unsigned int* LED_ADDR = (unsigned int*) (MMIO_BASE+LED_OFF);
     volatile unsigned int* SEVENSEG_ADDR = (unsigned int*) (MMIO_BASE+SEVENSEG_OFF);
 
     while(1)
@@ -44,14 +63,19 @@ int main()
         unsigned int accel_reading = *ACCEL_Data_ADDR;
         unsigned int accel_reading_mag = 0;
 
-        // display the magnitude on seven segment display
+        // display the reading on seven segment display
         *SEVENSEG_ADDR = accel_reading;
 
         uart_send_char('T');
         uart_send_char('=');
 
+        // Use volatile to make it into a rigister shift
+        volatile unsigned int mask = 255;
+        volatile unsigned int shift = 24;
+
+
         // Temp byte
-        unsigned int temp = (accel_reading >> 24) & 0xFF;
+        unsigned int temp = (accel_reading >> shift) & mask;
         uart_send_hex_byte(temp);
 
         uart_send_char(' ');
@@ -75,10 +99,12 @@ int main()
         unsigned int z_byte = accel_reading & 0xFF;
         uart_send_hex_byte(z_byte);
 
+        // Use volatile to make it reigster
+        volatile unsigned int sign_extend_mask = 0xFFFFFF00;
 
         // Sign extend
         int x_signed = (x_byte & 0x80)
-            ? (int)(x_byte | 0xFFFFFF00)
+            ? (int)(x_byte | sign_extend_mask)
             : (int)x_byte;
 
         int y_signed = (y_byte & 0x80)
@@ -88,6 +114,14 @@ int main()
         int z_signed = (z_byte & 0x80)
             ? (int)(z_byte | 0xFFFFFF00)
             : (int)z_byte;
+
+        volatile int scale = 1;
+        int x_scaled = x_signed >> 1;
+        int y_scaled = y_signed >> 1;
+        int z_scaled = z_signed >> scale;
+
+
+
         unsigned int x_mag = (x_signed < 0) ? -x_signed : x_signed;
         unsigned int y_mag = (y_signed < 0) ? -y_signed : y_signed;
         unsigned int z_mag = (z_signed < 0) ? -z_signed : z_signed;
@@ -97,7 +131,53 @@ int main()
         uart_send_char(' ');
         uart_send_char('M');
         uart_send_char('=');
-        uart_send_hex_word(accel_reading_mag);
+        uart_send_hex_halfword(accel_reading_mag);
+
+        // Test for more branch
+        unsigned int max_axis = x_mag;
+        unsigned int axis = 'X';
+
+        if (y_mag > max_axis) {
+            max_axis = y_mag;
+            axis = 'Y';
+        }
+
+        if (z_mag > max_axis) {
+            max_axis = z_mag;
+            axis = 'Z';
+        }
+
+        uart_send_char(' ');
+        uart_send_char('A');
+        uart_send_char('=');
+        uart_send_char(axis);
+
+        uart_send_char(' ');
+        uart_send_char('S');
+        uart_send_char('=');
+
+        int mag = 60;
+        int is_mag_small = accel_reading_mag < 20;
+        int is_mag_med = accel_reading_mag < mag;
+        int is_x_less_y = x_signed < y_signed;
+        int is_x_small = x_signed < 10;
+
+        *LED_ADDR = is_mag_small | (is_mag_med << 1) | (is_x_less_y << 2) | (is_x_small << 3);
+
+        if (accel_reading_mag < 20) {
+            uart_send_char('L');
+        }
+        else if (is_mag_med) {
+            uart_send_char('M');
+        }
+        else {
+            uart_send_char('H');
+        }
+        
+        TPacket tpacket = make_packet(accel_reading, x_scaled, y_scaled, z_scaled);
+        uart_send_packet(tpacket);
+
+
         uart_send_char('\r');
         uart_send_char('\n');
 
@@ -119,6 +199,14 @@ void uart_send_char(unsigned int c)
     *UART_TX_ADDR = c;
 }
 
+void uart_send_byte(unsigned int value) {
+    volatile unsigned int mask = 0xFF;
+    unsigned int tx_value = value & mask;
+
+    while (!(*UART_TX_ready_ADDR));
+    *UART_TX_ADDR = tx_value;
+}
+
 void uart_send_hex_digit(unsigned int digit)
 {
     if (digit < 10)
@@ -133,10 +221,58 @@ void uart_send_hex_byte(unsigned int value)
     uart_send_hex_digit(value & 0xF);
 }
 
-void uart_send_hex_word(unsigned int value)
+void uart_send_hex_halfword(unsigned int value)
 {
     uart_send_hex_digit((value >> 12) & 0xF);
     uart_send_hex_digit((value >> 8) & 0xF);
     uart_send_hex_digit((value >> 4) & 0xF);
     uart_send_hex_digit(value & 0xF);
 }
+
+void uart_send_u32(unsigned int value) {
+    volatile unsigned int shift24 = 24;
+    volatile unsigned int shift16 = 16;
+    volatile unsigned int shift8  = 8;
+    volatile unsigned int mask = 0xFF;
+
+    uart_send_byte((value >> shift24) & mask);
+    uart_send_byte((value >> shift16) & mask);
+    uart_send_byte((value >> shift8)  & mask);
+    uart_send_byte(value & mask);
+}
+
+
+void uart_send_packet(TPacket tpacket) {
+    uart_send_byte(tpacket.magic);
+    uart_send_byte(tpacket.check_sum);
+
+    uart_send_byte(0);
+    uart_send_byte(0);
+
+    uart_send_u32(tpacket.raw_data);
+    uart_send_u32((unsigned int)tpacket.x_scaled);
+    uart_send_u32((unsigned int)tpacket.y_scaled);
+    uart_send_u32((unsigned int)tpacket.z_scaled);
+}
+
+TPacket make_packet(unsigned int accel_reading, int x_scaled, int y_scaled, int z_scaled) {
+    TPacket tpacket = {0};
+    tpacket.magic = MAGIC;
+
+    // Use volatile to force 
+    volatile int val = 24;
+
+    tpacket.check_sum =
+        MAGIC ^
+        ((accel_reading >> val) & 0xFF) ^
+        ((accel_reading >> 16) & 0xFF) ^
+        ((accel_reading >> 8) & 0xFF) ^
+        (accel_reading & 0xFF);
+    tpacket.raw_data = accel_reading;
+    tpacket.x_scaled = x_scaled;
+    tpacket.y_scaled = y_scaled;
+    tpacket.z_scaled = z_scaled;
+
+    return tpacket;
+}
+
