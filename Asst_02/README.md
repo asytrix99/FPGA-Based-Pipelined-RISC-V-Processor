@@ -38,7 +38,7 @@ CG3207_Assignment_2/
 │   └── make.sh
 │
 ├── Bitstream/
-│   └── <bitstream>.bit
+│   └── Top.bit
 │
 ├── Constraint/
 │   ├── Nexys-A7-100T-Master.xdc
