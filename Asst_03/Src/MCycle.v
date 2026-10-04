@@ -61,6 +61,16 @@ module MCycle
     reg [2*width-1:0] temp_sum = 0 ;
     reg [2*width-1:0] shifted_op1 = 0 ;
     reg [2*width-1:0] shifted_op2 = 0 ;     
+    
+    // Divide operand
+    reg [width-1:0] div_dividend;
+    reg [width-1:0] div_divisor;
+    reg [width-1:0] div_quotient;
+    reg [width-1:0] div_remainder;
+    
+    reg div_quotient_sign;
+    reg div_remainder_sign;
+   
    
     always@( state, done, Start, RESET ) begin : IDLE_PROCESS  
 		// Note : This block uses non-blocking assignments to get around an unpredictable Verilog simulation behaviour.
@@ -89,16 +99,35 @@ module MCycle
 
     always@( posedge CLK ) begin : STATE_UPDATE_PROCESS // state updating
         state <= n_state ;    
-    end
-
+    end    
     
     always@( posedge CLK ) begin : COMPUTING_PROCESS // process which does the actual computation
         // n_state == COMPUTING and state == IDLE implies we are just transitioning into COMPUTING
         if( RESET | (n_state == COMPUTING & state == IDLE) ) begin // 2nd condition is true during the very 1st clock cycle of the multiplication
             count = 0 ;
             temp_sum = 0 ;
-            shifted_op1 = { {width{~MCycleOp[0] & Operand1[width-1]}}, Operand1 } ; // sign extend the operands  
-            shifted_op2 = { {width{~MCycleOp[0] & Operand2[width-1]}}, Operand2 } ; 
+            
+            if ( ~MCycleOp[1] ) begin // Multiply
+                shifted_op1 = { {width{~MCycleOp[0] & Operand1[width-1]}}, Operand1 } ; // sign extend the operands  
+                shifted_op2 = { {width{~MCycleOp[0] & Operand2[width-1]}}, Operand2 } ; 
+            end 
+            
+            else begin // Divide
+                if (~MCycleOp[0]) begin // Signed division
+                    div_dividend = Operand1[width-1] ? ~Operand1 + 1'b1 : Operand1;
+                    div_divisor = Operand2[width-1] ? ~Operand2 + 1'b1 : Operand2;
+                    div_quotient_sign = Operand1[width-1] ^ Operand2[width-1];
+                    div_remainder_sign = Operand1[width-1];
+                end
+                else begin
+                    div_dividend = Operand1;
+                    div_divisor = Operand2;
+                    div_quotient_sign = 0;
+                    div_remainder_sign = 0;
+                end
+                div_quotient = 0;
+                div_remainder = 0;
+            end
         end ;
         done <= 1'b0 ;   
         
@@ -116,10 +145,27 @@ module MCycle
                
             count = count + 1;    
         end    
+        
         else begin // Supposed to be Divide. The dummy code below takes 1 cycle to execute, just returns the operands. Change this to signed [ if(~MCycleOp[0]) ] and unsigned [ if(MCycleOp[0]) ] division.
-            temp_sum[2*width-1 : width] = Operand1 ;
-            temp_sum[width-1 : 0] = Operand2 ;
-            done <= 1'b1 ;          
+            div_remainder = {div_remainder[width-2 : 0], div_dividend[width-1]};
+            div_dividend = {div_dividend[width-2 : 0], 1'b0};                       // left shift
+            
+            if (div_remainder >= div_divisor) begin
+                div_remainder = div_remainder - div_divisor;
+                div_quotient = {div_quotient[width-2:0], 1'b1};
+            end
+            else begin
+                div_quotient = {div_quotient[width-2:0], 1'b0};
+            end
+            
+            if (count == width-1) begin
+                temp_sum[width-1:0] = div_quotient_sign ? ~div_quotient + 1'b1 : div_quotient;
+                temp_sum[2*width-1:width] = div_remainder_sign ? ~div_remainder + 1'b1 : div_remainder;
+                done <= 1'b1;
+            end
+            else begin
+                count = count + 1;
+            end
         end ;
         
         Result2 <= temp_sum[2*width-1 : width] ;
@@ -128,20 +174,3 @@ module MCycle
     end
    
 endmodule
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
