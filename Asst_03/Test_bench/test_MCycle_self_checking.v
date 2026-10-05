@@ -21,6 +21,8 @@
 
 
 /* // The following prompt was used with Claude Sonnet 5.5 with the following prompt, and the non-self-checking code, as in test_MCycle.v 
+
+Prompter: Foo Kang
 I am writing a test bench to test signed, unsigned multiplication and division. I want to make the test self-checking. Please do it in verilog and have a score tracking system with message printing for failed test cases.
 
 The input to MCycle is
@@ -35,6 +37,29 @@ the output is
 [width-1:0] Result1 which is the LSW of Product / Quotient
 [width-1:0] Result2 which is the MSW of Product / Remainder
 Busy which is set when start is set and clear when result is ready
+
+Prompter: Gan Andrew Hoa Thien
+
+I have attached the self-checking test bench above and my MCycle.v. I changed MCycle to use Booth radix-2 for signed multiplication (Task 3),
+selectable with a parameter, and the test bench needs to be extended to test it. Tell me how to add on to the test bench, 
+keeping the same self-checking and score tracking, and also check how many cycles each operation takes.
+ 
+The input to MCycle is
+ CLK,
+ RESET, 
+Start which is acsserted to start the computation, 
+[1:0] MCycleOp where "00" for signed multiplication, "01" for unsigned multiplication, "10" for signed division, "11" for unsigned division,
+[width-1:0] Operand1 which is the Multiplicand / Dividend
+[width-1:0] Operand2 which is the Multiplier / Divisor
+and a new parameter BOOTH where 1 = signed multiplication uses Booth radix-2 (takes width cycles), 0 = original shift-and-add signed multiplication (takes 2*width cycles)
+ 
+the output is
+[width-1:0] Result1 which is the LSW of Product / Quotient
+[width-1:0] Result2 which is the MSW of Product / Remainder
+Busy which is set when start is set and clear when result is ready, the number of cycles it stays high is the latency to be checked
+
+Lines added or changed for the Booth task are tagged ">>> ADDED" or ">>> CHANGED"
+
 */
 
 module test_MCycle(
@@ -50,6 +75,7 @@ module test_MCycle(
     localparam NUM_RANDOM        = 500;   // random pairs per run, used only when WIDTH > EXHAUSTIVE_MAX_W
     localparam EXHAUSTIVE_MAX_W  = 6;     // test every operand pair if WIDTH <= this
     localparam MAX_FAIL_PRINTS   = 50;    // limit on printed failure messages (counts are still tracked)
+    localparam BOOTH_EN          = 1;     // >>> ADDED: 1 = Booth signed multiply, 0 = original. Must match what you want to test
  
     localparam [1:0] OP_MUL_S = 2'b00,
                      OP_MUL_U = 2'b01,
@@ -73,7 +99,7 @@ module test_MCycle(
  
     // INSTANTIATE DEVICE/UNIT UNDER TEST (DUT/UUT)
     // (If MCycle has a width parameter, set it to WIDTH here, e.g. MCycle #(.width(WIDTH)) dut(...))
-    MCycle #(.width(WIDTH)) dut(
+    MCycle #(.width(WIDTH), .BOOTH(BOOTH_EN)) dut(   // >>> CHANGED: added .BOOTH(BOOTH_EN)
         CLK,
         RESET,
         Start,
@@ -100,6 +126,10 @@ module test_MCycle(
     integer op_pass  [0:3];
     integer op_fail  [0:3];
     integer fail_prints = 0;
+    // >>> ADDED: latency (Busy-high cycles) tracking per operation + expected-latency check
+    integer op_min_cyc [0:3];
+    integer op_max_cyc [0:3];
+    integer lat_fail = 0;
     integer k;
  
     // ------------------------------------------------------------------------
@@ -129,8 +159,6 @@ module test_MCycle(
         reg signed [WIDTH-1:0]   qa, qb, qq, qr;
         reg        [WIDTH-1:0]   ua, ub, uq, ur;
         begin
-            $display("compute_expected: WIDTH=%0d op=%b a=%h b=%h",
-                 WIDTH, op, a, b);
             case (op)
                 OP_MUL_S: begin
                     sa = {{WIDTH{a[WIDTH-1]}}, a};
@@ -237,6 +265,7 @@ module test_MCycle(
         input [WIDTH-1:0] b;
         reg [WIDTH-1:0] exp1, exp2;
         integer cycles;
+        integer rise_c, busy_cycles, exp_cycles;   // >>> ADDED
         reg     busy_seen;
         reg     timed_out;
         begin
@@ -256,6 +285,8 @@ module test_MCycle(
                 cycles = cycles + 1;
                 if (Busy === 1'b1) busy_seen = 1'b1;
             end
+ 
+            rise_c = cycles;               // >>> ADDED: cycles until Busy was first seen high
  
             // 2. Busy must clear within the timeout
             timed_out = 1'b0;
@@ -281,6 +312,18 @@ module test_MCycle(
                 do_reset;
             end else begin
                 Start = 1'b0;
+                // >>> ADDED: latency = total number of cycles Busy was high
+                busy_cycles = rise_c + cycles;
+                if (busy_cycles < op_min_cyc[op]) op_min_cyc[op] = busy_cycles;
+                if (busy_cycles > op_max_cyc[op]) op_max_cyc[op] = busy_cycles;
+                // expected latency: signed multiply with BOOTH_EN=0 is 2*WIDTH, everything else is WIDTH
+                exp_cycles = (op == OP_MUL_S && BOOTH_EN == 0) ? 2*WIDTH : WIDTH;
+                if (busy_cycles != exp_cycles) begin
+                    lat_fail = lat_fail + 1;
+                    if (lat_fail <= 10)
+                        $display("[LATENCY] %0s Op1=0x%h Op2=0x%h took %0d cycles, expected %0d",
+                                 op_name(op), a, b, busy_cycles, exp_cycles);
+                end
                 if (Result1 === exp1 && Result2 === exp2) begin
                     record(op, 1'b1);
                 end else begin
@@ -308,7 +351,7 @@ module test_MCycle(
     // ------------------------------------------------------------------------
     // STIMULI
     // ------------------------------------------------------------------------
-    reg [WIDTH-1:0] corner [0:7];
+    reg [WIDTH-1:0] corner [0:9];     // >>> CHANGED: 8 -> 10 entries
     reg [WIDTH-1:0] ta, tb;
     integer i, j;
  
@@ -317,6 +360,8 @@ module test_MCycle(
             op_tests[k] = 0;
             op_pass[k]  = 0;
             op_fail[k]  = 0;
+            op_min_cyc[k] = 32'h7fffffff;   // >>> ADDED
+            op_max_cyc[k] = 0;              // >>> ADDED
         end
  
         corner[0] = 0;                              // 0
@@ -327,6 +372,9 @@ module test_MCycle(
         corner[5] = {1'b1, {(WIDTH-1){1'b0}}};      // most negative (signed) / 2^(W-1) unsigned
         corner[6] = {WIDTH{1'b1}};                  // -1 / max unsigned
         corner[7] = {{(WIDTH-1){1'b1}}, 1'b0};      // -2 / max unsigned - 1
+        // >>> ADDED: alternating patterns, worst case for Booth (add/subtract EVERY cycle): 0101..01 and 1010..10
+        corner[8] = {(WIDTH/2){2'b01}};
+        corner[9] = {(WIDTH/2){2'b10}};
  
         $display("==============================================================");
         $display(" MCycle self-checking testbench  (WIDTH = %0d)", WIDTH);
@@ -336,8 +384,8 @@ module test_MCycle(
  
         // Phase 1: all combinations of corner-case values
         $display("--- Phase 1: corner cases ---");
-        for (i = 0; i < 8; i = i + 1)
-            for (j = 0; j < 8; j = j + 1)
+        for (i = 0; i < 10; i = i + 1)      // >>> CHANGED: 8 -> 10
+            for (j = 0; j < 10; j = j + 1)
                 run_all_ops(corner[i], corner[j]);
  
         // Phase 2: exhaustive (small widths) or random (large widths)
@@ -367,10 +415,18 @@ module test_MCycle(
         $display(" %-20s : %0d run, %0d passed, %0d failed", "SIGNED DIVIDE",     op_tests[2], op_pass[2], op_fail[2]);
         $display(" %-20s : %0d run, %0d passed, %0d failed", "UNSIGNED DIVIDE",   op_tests[3], op_pass[3], op_fail[3]);
         $display("--------------------------------------------------------------");
+        // >>> ADDED: latency report
+        $display(" LATENCY (cycles Busy is high), BOOTH_EN = %0d:", BOOTH_EN);
+        $display("   SIGNED MULTIPLY   : min %0d, max %0d", op_min_cyc[0], op_max_cyc[0]);
+        $display("   UNSIGNED MULTIPLY : min %0d, max %0d", op_min_cyc[1], op_max_cyc[1]);
+        $display("   SIGNED DIVIDE     : min %0d, max %0d", op_min_cyc[2], op_max_cyc[2]);
+        $display("   UNSIGNED DIVIDE   : min %0d, max %0d", op_min_cyc[3], op_max_cyc[3]);
+        $display("   latency mismatches: %0d", lat_fail);
+        $display("--------------------------------------------------------------");
         $display(" TOTAL : %0d run, %0d passed, %0d failed  (score %0d%%)",
                  total_tests, total_pass, total_fail,
                  (total_tests == 0) ? 0 : (total_pass * 100) / total_tests);
-        if (total_fail == 0)
+        if (total_fail == 0 && lat_fail == 0)   // >>> CHANGED: also require the expected latency
             $display(" RESULT: ALL TESTS PASSED");
         else
             $display(" RESULT: %0d TEST(S) FAILED", total_fail);
@@ -379,4 +435,3 @@ module test_MCycle(
     end
  
 endmodule
- 
