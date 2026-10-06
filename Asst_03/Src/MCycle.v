@@ -34,7 +34,9 @@
 
 module MCycle
 
-    #(parameter width = 4) // Keep this at 4 to verify your algorithms with 4 bit numbers (easier). When using MCycle as a component in ARM, generic map it to 32.
+    #(parameter width = 4,
+      parameter BOOTH = 1) // Keep this at 4 to verify your algorithms with 4 bit numbers (easier). When using MCycle as a component in ARM, generic map it to 32.
+      // BOOTH = 1: signed multiply, BOOTH = 0: original signed multiply
     (
         input CLK,
         input RESET, // Connect this to the reset of the ARM processor.
@@ -50,17 +52,23 @@ module MCycle
 // use the Busy signal to reset WE_PC to 0 in ARM.v (aka "freeze" PC). The two signals are complements of each other
 // since the IDLE_PROCESS is combinational, instantaneously asserts Busy once Start is asserted
   
-    parameter IDLE = 1'b0 ;  // will cause a warning which is ok to ignore - [Synth 8-2507] parameter declaration becomes local in MCycle with formal parameter declaration list...
-
-    parameter COMPUTING = 1'b1 ; // this line will also cause the above warning
+    // change to localparam to be explicit since parameter is used in header
+    localparam IDLE = 1'b0 ;
+    localparam COMPUTING = 1'b1 ;
+    
     reg state = IDLE ;
     reg n_state = IDLE ;
-   
     reg done ;
     reg [7:0] count = 0 ; // assuming no computation takes more than 256 cycles.
     reg [2*width-1:0] temp_sum = 0 ;
     reg [2*width-1:0] shifted_op1 = 0 ;
     reg [2*width-1:0] shifted_op2 = 0 ;     
+    
+    // booth registers
+    reg [2*width:0] booth_p = 0; // { acc[width], multiplier[width], q_minus1[1]} (2*width+1 bits)
+    reg [width-1:0] booth_a = 0; // multiplicand A, never shift (width bits)
+    reg [width:0] booth_sum; // acc -> 1 bit wider, compensate for overflow
+    reg [2*width+1:0] booth_tmp; // placeholder before right shift
     
     // Divide operand
     reg [width-1:0] div_dividend;
@@ -70,7 +78,6 @@ module MCycle
     
     reg div_quotient_sign;
     reg div_remainder_sign;
-   
    
     always@( state, done, Start, RESET ) begin : IDLE_PROCESS  
 		// Note : This block uses non-blocking assignments to get around an unpredictable Verilog simulation behaviour.
@@ -110,6 +117,8 @@ module MCycle
             if ( ~MCycleOp[1] ) begin // Multiply
                 shifted_op1 = { {width{~MCycleOp[0] & Operand1[width-1]}}, Operand1 } ; // sign extend the operands  
                 shifted_op2 = { {width{~MCycleOp[0] & Operand2[width-1]}}, Operand2 } ; 
+                booth_p = { {width{1'b0}}, Operand2, 1'b0 };
+                booth_a = Operand1;
             end 
             
             else begin // Divide
@@ -132,19 +141,42 @@ module MCycle
         done <= 1'b0 ;   
         
         if( ~MCycleOp[1] ) begin // Multiply
-            // if( ~MCycleOp[0] ), takes 2*'width' cycles to execute, returns signed(Operand1)*signed(Operand2)
-            // if( MCycleOp[0] ), takes 'width' cycles to execute, returns unsigned(Operand1)*unsigned(Operand2)        
-            if( shifted_op2[0] ) // add only if b0 = 1
-                temp_sum = temp_sum + shifted_op1 ; // partial product for multiplication
+            // signed multiply
+            if (~MCycleOp[0] & (BOOTH != 0)) begin
+                if (n_state == COMPUTING) begin
+                    // 01 -> end of run of 1s -> acc = acc + A
+                    // 10 -> start of run of 1s -> acc = acc - A
+                    // 00 / 11 -> nothing, middle of run of 00's/11's
+                    // sign extend acc & A by 1 bit to compensate for overflow
+                    case (booth_p[1:0])
+                        2'b01: booth_sum = {booth_p[2*width], booth_p[2*width:width+1]} + {booth_a[width-1], booth_a};
+                        2'b10: booth_sum = {booth_p[2*width], booth_p[2*width:width+1]} - {booth_a[width-1], booth_a};
+                        default: booth_sum = {booth_p[2*width], booth_p[2*width:width+1]};
+                    endcase
+                    booth_tmp = { booth_sum, booth_p[width:0] }; // combine all -> { new acc, multiplier A, q_minus1 }  
+                    booth_p = booth_tmp[2*width+1:1]; // right shift, drop q_minus1
+                    temp_sum = booth_p[2*width:1]; // product so far = { acc, multiplier A }
+                    
+                    if (count == width-1)
+                        done <= 1'b1;
+                    count = count + 1;
+                end
+            end
+            
+            // unsigned multiply  
+            else begin 
+                if( shifted_op2[0] ) // add only if b0 = 1
+                    temp_sum = temp_sum + shifted_op1 ; // partial product for multiplication
                 
-            shifted_op2 = {1'b0, shifted_op2[2*width-1 : 1]} ;
-            shifted_op1 = {shifted_op1[2*width-2 : 0], 1'b0} ;    
+                shifted_op2 = {1'b0, shifted_op2[2*width-1 : 1]} ;
+                shifted_op1 = {shifted_op1[2*width-2 : 0], 1'b0} ;    
                 
-            if( (MCycleOp[0] & count == width-1) | (~MCycleOp[0] & count == 2*width-1) ) // last cycle?
-                done <= 1'b1 ;   
-               
-            count = count + 1;    
-        end    
+                if( (MCycleOp[0] & count == width-1) | (~MCycleOp[0] & count == 2*width-1) ) // last cycle?
+                    done <= 1'b1 ;   
+                   
+                count = count + 1;    
+            end    
+        end
         
         else begin // Supposed to be Divide. The dummy code below takes 1 cycle to execute, just returns the operands. Change this to signed [ if(~MCycleOp[0]) ] and unsigned [ if(MCycleOp[0]) ] division.
             div_remainder = {div_remainder[width-2 : 0], div_dividend[width-1]};
@@ -166,7 +198,7 @@ module MCycle
             else begin
                 count = count + 1;
             end
-        end ;
+        end
         
         Result2 <= temp_sum[2*width-1 : width] ;
         Result1 <= temp_sum[width-1 : 0] ;
