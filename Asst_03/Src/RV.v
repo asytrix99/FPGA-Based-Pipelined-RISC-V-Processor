@@ -91,6 +91,8 @@ module RV #(
     wire [1:0] ALUSrcB ;                // Instantiated by decoder
     //wire [2:0] ImmSrc ;
     wire [3:0] ALUControl ;             // Instantiated by decoder
+    wire IsMCycle;                      // Instantiated by decoder
+    wire MCycleResultHigh;              // Instantiated by decoder
 
     // PC_Logic signals
     //wire [1:0] PCS
@@ -105,19 +107,27 @@ module RV #(
     //wire [31:0] ALUResult ;
     wire [2:0] ALUFlags;                // Instantiated by PC_Logic
     
+    // MCycle signals   
+    wire Start;                         // Instantiated by assign below
+    wire [1:0] MCycleOp;                // Instantiated by Decoder
+    wire [31:0] Operand1;               // Instantiated by assign below
+    wire [31:0] Operand2;               // Instantiated by assign below
+    wire [31:0] Result1;                // Instantiated by MCycle
+    wire [31:0] Result2;                // Instantiated by MCycle
+    wire Busy;                          // Instantiated by MCycle
+    
     // ProgramCounter signals
     //wire CLK ;
     //wire RESET ;
-    wire WE_PC ;    
+    reg WE_PC ;                         // Instantiated in the alway loop
     reg [31:0] PC_IN ;                  // Instantiated in the alway loop
     //wire [31:0] PC ; 
-        
+            
     // Other internal signals here
     wire [31:0] PC_Offset ;              
-    wire [31:0] Result ;                 // Instantiated by assign below
+    reg [31:0] Result ;                  // Instantiated by assign below
     
     assign MemRead = MemtoReg;           // This is needed for the proper functionality of some devices such as UART CONSOLE
-    assign WE_PC = 1 ;                   // Will need to control it for multi-cycle operations (Multiplication, Division) and/or Pipelining with hazard hardware.
 
     assign ReadData = ReadData_in;       // Change datapath as appropriate if supporting lb/lbu/lh/lhu
     assign WriteData_out = WriteData;    // Change datapath as appropriate if supporting sb/sh
@@ -140,8 +150,12 @@ module RV #(
     assign Funct3 = Instr[14:12];
     assign Funct7 = Instr[31:25];
     
-    assign Result = MemtoReg ? ReadData : ALUResult;
     assign PC_Offset = PC + ExtImm;
+    
+    // MCycle
+    assign Start = IsMCycle;
+    assign Operand1 = RD1;
+    assign Operand2 = RD2;
     
     // Instantiate Src_A
     always @(*) 
@@ -174,6 +188,25 @@ module RV #(
             2'b11: PC_IN = (RD1 + ExtImm) & 32'hFFFFFFFE;
             default: PC_IN = PC + 32'b100;
         endcase	
+	end
+	
+	// Instantiate WE_PC
+	always @(*)
+	begin
+	   if (IsMCycle && Busy)
+	       WE_PC = 1'b0;
+	   else
+	       WE_PC = 1'b1;
+	end
+	
+	always @(*)
+	begin
+	   if (MemtoReg)
+	       Result = ReadData;
+	   else if (IsMCycle)
+	       Result = MCycleResultHigh ? Result2 : Result1;
+	   else
+	       Result = ALUResult;
 	end
 
 
@@ -208,7 +241,10 @@ module RV #(
                     ALUSrcA,
                     ALUSrcB,
                     ImmSrc,
-                    ALUControl
+                    ALUControl,
+                    IsMCycle,
+                    MCycleOp,
+                    MCycleResultHigh
                 );
                 
     // Instantiate PC_Logic
@@ -226,7 +262,20 @@ module RV #(
                     ALUControl,
                     ALUResult,
                     ALUFlags
-                );                
+                );       
+                
+    // Instantiate MCycle
+    MCycle #(.width(32)) MCycle1(
+                    CLK,
+                    RESET,
+                    Start,
+                    MCycleOp,
+                    Operand1,
+                    Operand2,
+                    Result1,
+                    Result2,
+                    Busy
+                );  
     
     // Instantiate ProgramCounter    
     ProgramCounter #(.PC_INIT(PC_INIT)) ProgramCounter1(
