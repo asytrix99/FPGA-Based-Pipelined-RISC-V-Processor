@@ -75,7 +75,7 @@ localparam MMIO_BASE = 32'hFFFF_0000;
 localparam PC_INIT = IROM_BASE;			// PC initialization value - same as IROM_BASE
 
 localparam IROM_DEPTH_BITS = 12;		//9 for 128 words. Change if your program is larger.
-localparam DMEM_DEPTH_BITS = 9;		//9 for 128 words. Change if your data (const+variable) is larger, and in C/Assembly to set STACK_INIT appropriately.
+localparam DMEM_DEPTH_BITS = 14;		//9 for 128 words. Change if your data (const+variable) is larger, and in C/Assembly to set STACK_INIT appropriately.
 localparam MMIO_DEPTH_BITS = 8;
 
 // Memory-mapped peripheral register offsets
