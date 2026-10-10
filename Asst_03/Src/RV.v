@@ -124,8 +124,10 @@ module RV #(
     //wire [31:0] PC ; 
             
     // Other internal signals here
-    wire [31:0] PC_Offset ;              
+    wire [31:0] PC_Offset ;          
     reg [31:0] Result ;                  // Instantiated by assign below
+    reg [7:0] LoadByte;                  // Instantiated in the alway loop
+    reg [15:0] LoadHalf;
     
     assign MemRead = MemtoReg;           // This is needed for the proper functionality of some devices such as UART CONSOLE
 
@@ -199,10 +201,36 @@ module RV #(
 	       WE_PC = 1'b1;
 	end
 	
+	// Instantiate LoadByte and LoadWord
+	always @(*) begin
+        case (ALUResult[1:0])
+            2'b00: LoadByte = ReadData[7:0];
+            2'b01: LoadByte = ReadData[15:8];
+            2'b10: LoadByte = ReadData[23:16];
+            2'b11: LoadByte = ReadData[31:24];
+            default: LoadByte = 8'b0;
+        endcase
+    
+        case (ALUResult[1])
+            1'b0: LoadHalf = ReadData[15:0];
+            1'b1: LoadHalf = ReadData[31:16];
+            default: LoadHalf = 16'b0;
+        endcase
+    end
+	
 	always @(*)
 	begin
-	   if (MemtoReg)
-	       Result = ReadData;
+        if (MemtoReg) begin
+            case (Funct3)
+                3'b000: Result = {{24{LoadByte[7]}}, LoadByte};     //lb
+                3'b001: Result = {{16{LoadHalf[15]}}, LoadHalf};    //lh
+                3'b010: Result = ReadData;                          //lw
+                3'b100: Result = {24'b0, LoadByte};                 //lbu
+                3'b101: Result = {24'b0, LoadHalf};                 //lhu
+                default: Result = ReadData;
+            endcase
+
+       end
 	   else if (IsMCycle)
 	       Result = MCycleResultHigh ? Result2 : Result1;
 	   else
