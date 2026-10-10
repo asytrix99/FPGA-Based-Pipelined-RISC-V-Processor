@@ -196,12 +196,29 @@ module tb_RV(
                 32'd156: if (WriteData_out !== 32'd42)        $display("JALR jump failed");
                 32'd160: if (WriteData_out !== 32'h0040_017c) $display("JALR link failed");
                 
+                // LB
+                32'd164: if (WriteData_out !== 32'h0000_0001) $display("LB byte 0 failed");
+                32'd168: if (WriteData_out !== 32'h0000_007F) $display("LB byte 1 failed");
+                32'd172: if (WriteData_out !== 32'hFFFF_FFFF) $display("LB byte 2 sign extension failed");
+                32'd176: if (WriteData_out !== 32'hFFFF_FF80) $display("LB byte 3 sign extension failed");
+                
+                // LBU
+                32'd180: if (WriteData_out !== 32'h0000_00FF) $display("LBU byte 2 zero extension failed");
+                32'd184: if (WriteData_out !== 32'h0000_0080) $display("LBU byte 3 zero extension failed");
+                
+                // LH
+                32'd188: if (WriteData_out !== 32'h0000_7F01) $display("LH lower half failed");
+                32'd192: if (WriteData_out !== 32'hFFFF_80FF) $display("LH sign extension failed");
+                
+                // LHU
+                32'd196: if (WriteData_out !== 32'h0000_7F01) $display("LHU lower half failed");
+                32'd200: if (WriteData_out !== 32'h0000_80FF) $display("LHU zero extension failed");
                 default: $display("Unexpected store address: %h", ALUResult);
             endcase
             
             store_count = store_count + 1;
 
-            if (store_count == 41) begin
+            if (store_count == 49) begin
                 $display("All RV tests completed");
                 $finish;
             end
@@ -216,6 +233,7 @@ module tb_RV(
             DMEM[i] = 32'b0;
             
         DMEM[0] = 32'h1234_5678;
+        DMEM[1] = 32'h80FF_7F01;
         // -7 is ffff_fff9
         // 3 is 0000_0003
 
@@ -363,7 +381,37 @@ module tb_RV(
         IROM[96] = encode_s(12'd156, 5'd9, 5'd0, 3'b010); // sw x9, 156(x0)
         IROM[97] = encode_s(12'd160, 5'd10, 5'd0, 3'b010);// sw x10, 160(x0)
 
-        IROM[98] = encode_j(21'd0, 5'd0);                 // jal x0, 0                
+        IROM[98]  = encode_l(12'd4, 5'd0, 3'b000, 5'd1);   // lb  x1, 4(x0)
+        IROM[99]  = encode_s(12'd164, 5'd1, 5'd0, 3'b010); // sw  x1, 164(x0)
+        
+        IROM[100] = encode_l(12'd5, 5'd0, 3'b000, 5'd2);   // lb  x2, 5(x0)
+        IROM[101] = encode_s(12'd168, 5'd2, 5'd0, 3'b010); // sw  x2, 168(x0)
+        
+        IROM[102] = encode_l(12'd6, 5'd0, 3'b000, 5'd3);   // lb  x3, 6(x0)
+        IROM[103] = encode_s(12'd172, 5'd3, 5'd0, 3'b010); // sw  x3, 172(x0)
+        
+        IROM[104] = encode_l(12'd7, 5'd0, 3'b000, 5'd4);   // lb  x4, 7(x0)
+        IROM[105] = encode_s(12'd176, 5'd4, 5'd0, 3'b010); // sw  x4, 176(x0)
+        
+        IROM[106] = encode_l(12'd6, 5'd0, 3'b100, 5'd5);   // lbu x5, 6(x0)
+        IROM[107] = encode_s(12'd180, 5'd5, 5'd0, 3'b010); // sw  x5, 180(x0)
+        
+        IROM[108] = encode_l(12'd7, 5'd0, 3'b100, 5'd6);   // lbu x6, 7(x0)
+        IROM[109] = encode_s(12'd184, 5'd6, 5'd0, 3'b010); // sw  x6, 184(x0)
+        
+        IROM[110] = encode_l(12'd4, 5'd0, 3'b001, 5'd7);   // lh  x7, 4(x0)
+        IROM[111] = encode_s(12'd188, 5'd7, 5'd0, 3'b010); // sw  x7, 188(x0)
+        
+        IROM[112] = encode_l(12'd6, 5'd0, 3'b001, 5'd8);   // lh  x8, 6(x0)
+        IROM[113] = encode_s(12'd192, 5'd8, 5'd0, 3'b010); // sw  x8, 192(x0)
+        
+        IROM[114] = encode_l(12'd4, 5'd0, 3'b101, 5'd10);  // lhu x10, 4(x0)
+        IROM[115] = encode_s(12'd196, 5'd10, 5'd0, 3'b010);// sw  x10, 196(x0)
+        
+        IROM[116] = encode_l(12'd6, 5'd0, 3'b101, 5'd11);  // lhu x11, 6(x0)
+        IROM[117] = encode_s(12'd200, 5'd11, 5'd0, 3'b010);// sw  x11, 200(x0)
+        
+        IROM[118] = encode_j(21'd0, 5'd0); // jal x0, 0
         // Initialise CPU
         repeat (2) @(negedge CLK);
         RESET = 1'b0;
