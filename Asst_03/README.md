@@ -1,4 +1,4 @@
-# CG3207 Assignment 2
+# CG3207 Assignment 3
 
 
 ## Folder structures
@@ -12,6 +12,7 @@ CG3207_Assignment_2/
 │   ├── ALU.v
 │   ├── Decoder.v
 │   ├── Extend.v
+│   ├── MCycle.v
 │   ├── PC_Logic.v
 │   ├── pmodoledrgb_bitmap.vhd
 │   ├── ProgramCounter.v
@@ -26,7 +27,10 @@ CG3207_Assignment_2/
 ├── Test_bench/
 │   ├── tb_ALU.v
 │   ├── tb_Decoder.v
+│   ├── tb_MCycle.v
+│   ├── tb_MCycle_self_checking.v
 │   ├── tb_PC_Logic.v
+│   ├── tb_RV.v
 │   ├── test_Wrapper.v
 │   ├── test_Wrapper_DIP_to_LED.v
 │   └── test_Wrapper_DIP_to_LED_self_checking.v
@@ -45,42 +49,41 @@ CG3207_Assignment_2/
 │   ├── TOP_Nexys4.xdc
 │   └── TOP_Nexys4DDR.xdc
 │
+├── radix2-booth.pptx
+│
 └── README.txt
 ```
 
 ## Files changed
 ### RTL Source Files
-- `ALU.v`
-   - Implements the ALU logic
 - `Decoder.v`
-   - Implements the Decoder logic 
-- `PC_Logic.v`
-   - Implements the PC logic 
+   - Implements the Decoder logic for mul, div and divu.
+   - Add additional IsMycle, MCycleOp and MCycleResultHigh as output
 - `RV.v`
-   - Instantiate the required signal
-   - Implement the logic to compute the next PC value
+   - Hook MCycle module and delay PC update when busy
+- `MCycle.v`
+   - Implement Division logic and Radix 2 booth multiplier for enchancement
 - `Wrapper.v`
-   - Change IROM_DEPTH_BITS to accomodate all required instructions
+   - Change DEPTH_BITS to accomodate all required instructions
 
 ### Testbench Files
-- `tb_ALU.v`
-    - Implement self-checking simulation for ALU
 - `tb_Decoder`
-    - Implement self-checking simulation for Decoder
-- `tb_PC_Logic`
-    - Implement self-checking simulation for PC_Logic
+    - Implement self-checking simulation for Decoder to check mul and div
+- `tb_MCycle_self_checking`
+    - Implement self-checking simulation for MCycle. AI has been employed to convert to self checking.
+- `tb_RV`
+    - Implement self-checking simulation for RV.v.
 - `test_Wrapper.v`
-    - Implement self-checking simulation for accel.c
+    - Update self-checking simulation for accel.c 
 
 ### Software
 - #### `accel.c`
     C program used for the processor demonstration. Reads and processes acceleromter data and outputs
-    the result through UART, LEDs, and seven-segment display
+    the result through UART, LEDs, and seven-segment display. This is an extension from asst2, with included
+    mul, div and divu instructions.
 
 - #### `accel.asm` 
-    RISC-V assembly generated from `accel.c` using [Godbolt Compiler Explorer](https://godbolt.org/) and 
-    modified where necessary to use only instructions supported by the processor. 
-
+    RISC-V assembly generated from `accel.c` using [Godbolt Compiler Explorer](https://godbolt.org/). 
     `RISC-V rv32gc clang 20.1.0` is used to generate the assembly.
 
  - #### `parser.cpp`
@@ -89,6 +92,15 @@ CG3207_Assignment_2/
 
     AI has been used to generate the serial-port communication code.
 
+- #### `booth_visualizer.html`
+    A HTML visualizer for the Radix 2 booth multiplier. AI has been used to generate this.
+
+- #### `prompt.md`
+    A markdown file which include all the AI prompt used for booth_visualizer.html
+
+### Others
+- #### `radix2-booth.pptx`
+    A powerpoint slides to demonstrate radix 2 booth enchancement
 
 ## Demo Program
 The demo program reads a 32-bit accelerometer value with the following format:

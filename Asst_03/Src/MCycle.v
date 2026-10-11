@@ -137,7 +137,7 @@ module MCycle
                 div_quotient = 0;
                 div_remainder = 0;
             end
-        end ;
+        end
         done <= 1'b0 ;   
         
         if( ~MCycleOp[1] ) begin // Multiply
