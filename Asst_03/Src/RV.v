@@ -226,7 +226,7 @@ module RV #(
                 3'b001: Result = {{16{LoadHalf[15]}}, LoadHalf};    //lh
                 3'b010: Result = ReadData;                          //lw
                 3'b100: Result = {24'b0, LoadByte};                 //lbu
-                3'b101: Result = {24'b0, LoadHalf};                 //lhu
+                3'b101: Result = {16'b0, LoadHalf};                 //lhu
                 default: Result = ReadData;
             endcase
 
