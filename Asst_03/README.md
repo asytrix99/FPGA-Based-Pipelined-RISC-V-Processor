@@ -39,7 +39,9 @@ CG3207_Assignment_2/
 │   ├── accel.c
 │   ├── accel.asm
 │   ├── parser.cpp
-│   └── make.sh
+│   ├── make.sh
+│   ├── booth_visualizer.html
+│   └── prompt.md
 │
 ├── Bitstream/
 │   └── Top.bit
