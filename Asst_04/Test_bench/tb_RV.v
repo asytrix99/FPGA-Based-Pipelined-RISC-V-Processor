@@ -5,7 +5,7 @@ module tb_RV(
     );
     
     localparam [31:0] BASE = 32'h0040_0000;
-    localparam IROM_DEPTH_BITS = 9;	//9 for 128 words. Change if your program is larger.
+    localparam IROM_DEPTH_BITS = 10;	//10 for 256 words. Change if your program is larger.
     localparam DMEM_DEPTH_BITS = 9;		//9 for 128 words. Change if your data (const+variable) is larger, and in C/Assembly to set STACK_INIT appropriately.
     
     reg [31:0] IROM [0:2**(IROM_DEPTH_BITS-2)-1];
@@ -22,6 +22,20 @@ module tb_RV(
     wire [31:0] WriteData_out;
     
     assign ReadData_in = (MemRead) ? DMEM[ALUResult[DMEM_DEPTH_BITS-1:2]] : 32'b0;
+    
+    // Byte-wise DMEM write, same as in Wrapper.v. Only addresses from SCRATCH onwards are written, 
+    // as the lower addresses are only used to tag which test a store belongs to.
+    localparam [31:0] SCRATCH = 32'd256;
+    localparam NUM_STORES = 65;
+    integer k;
+    always @(posedge CLK) begin
+        if (!RESET && ALUResult >= SCRATCH) begin
+            for (k = 0; k < 4; k = k + 1) begin
+                if (MemWrite_out[k])
+                    DMEM[ALUResult[DMEM_DEPTH_BITS-1:2]][k*8 +: 8] <= WriteData_out[k*8 +: 8];
+            end
+        end
+    end
     
     always #5 CLK = ~CLK;
    
@@ -213,12 +227,34 @@ module tb_RV(
                 // LHU
                 32'd196: if (WriteData_out !== 32'h0000_7F01) $display("LHU lower half failed");
                 32'd200: if (WriteData_out !== 32'h0000_80FF) $display("LHU zero extension failed");
+                
+                // SB - word read back after each store, the other bytes must be unchanged
+                32'd204: if (WriteData_out !== 32'h1122_33A1) $display("SB byte 0 readback failed");
+                32'd208: if (WriteData_out !== 32'h1122_B2A1) $display("SB byte 1 readback failed");
+                32'd212: if (WriteData_out !== 32'h11C3_B2A1) $display("SB byte 2 readback failed");
+                32'd216: if (WriteData_out !== 32'hD4C3_B2A1) $display("SB byte 3 readback failed");
+                
+                // SH
+                32'd220: if (WriteData_out !== 32'h1122_BEEF) $display("SH lower half readback failed");
+                32'd224: if (WriteData_out !== 32'hCAFE_BEEF) $display("SH upper half readback failed");
+                
+                // SW
+                32'd228: if (WriteData_out !== 32'h0005_CAFE) $display("SW readback failed");
+                
+                // The SB/SH/SW stores themselves. Only the enabled bytes of WriteData_out are checked.
+                32'd256: if (MemWrite_out !== 4'b0001 || WriteData_out[7:0]   !== 8'hA1)    $display("SB byte 0 failed");
+                32'd257: if (MemWrite_out !== 4'b0010 || WriteData_out[15:8]  !== 8'hB2)    $display("SB byte 1 failed");
+                32'd258: if (MemWrite_out !== 4'b0100 || WriteData_out[23:16] !== 8'hC3)    $display("SB byte 2 failed");
+                32'd259: if (MemWrite_out !== 4'b1000 || WriteData_out[31:24] !== 8'hD4)    $display("SB byte 3 failed");
+                32'd260: if (MemWrite_out !== 4'b0011 || WriteData_out[15:0]  !== 16'hBEEF) $display("SH lower half failed");
+                32'd262: if (MemWrite_out !== 4'b1100 || WriteData_out[31:16] !== 16'hCAFE) $display("SH upper half failed");
+                32'd264: if (MemWrite_out !== 4'b1111 || WriteData_out !== 32'h0005_CAFE)   $display("SW failed");
                 default: $display("Unexpected store address: %h", ALUResult);
             endcase
             
             store_count = store_count + 1;
 
-            if (store_count == 49) begin
+            if (store_count == NUM_STORES) begin
                 $display("All RV tests completed");
                 $finish;
             end
@@ -226,7 +262,7 @@ module tb_RV(
     end
     
     initial begin
-        for (i = 0; i < 128; i = i + 1)
+        for (i = 0; i < 2**(IROM_DEPTH_BITS-2); i = i + 1)
             IROM[i] = 32'h0000_0013; // NOP
          
         for (i = 0; i < 128; i = i + 1)
@@ -234,6 +270,8 @@ module tb_RV(
             
         DMEM[0] = 32'h1234_5678;
         DMEM[1] = 32'h80FF_7F01;
+        DMEM[64] = 32'h1122_3344; // address 256, for sb
+        DMEM[65] = 32'h1122_3344; // address 260, for sh
         // -7 is ffff_fff9
         // 3 is 0000_0003
 
@@ -411,15 +449,60 @@ module tb_RV(
         IROM[116] = encode_l(12'd6, 5'd0, 3'b101, 5'd11);  // lhu x11, 6(x0)
         IROM[117] = encode_s(12'd200, 5'd11, 5'd0, 3'b010);// sw  x11, 200(x0)
         
-        IROM[118] = encode_j(21'd0, 5'd0); // jal x0, 0
+        // SB - upper bits of x12 are non-zero to check that only the lowest byte is stored
+        IROM[118] = encode_i(12'h5A1, 5'd0, 3'b000, 5'd12); // addi x12, x0, 0x5A1
+        IROM[119] = encode_s(12'd256, 5'd12, 5'd0, 3'b000); // sb  x12, 256(x0)
+        IROM[120] = encode_l(12'd256, 5'd0, 3'b010, 5'd9);  // lw  x9, 256(x0)
+        IROM[121] = encode_s(12'd204, 5'd9, 5'd0, 3'b010);  // sw  x9, 204(x0)
+        
+        IROM[122] = encode_i(12'h5B2, 5'd0, 3'b000, 5'd12); // addi x12, x0, 0x5B2
+        IROM[123] = encode_s(12'd257, 5'd12, 5'd0, 3'b000); // sb  x12, 257(x0)
+        IROM[124] = encode_l(12'd256, 5'd0, 3'b010, 5'd9);  // lw  x9, 256(x0)
+        IROM[125] = encode_s(12'd208, 5'd9, 5'd0, 3'b010);  // sw  x9, 208(x0)
+        
+        IROM[126] = encode_i(12'h5C3, 5'd0, 3'b000, 5'd12); // addi x12, x0, 0x5C3
+        IROM[127] = encode_s(12'd258, 5'd12, 5'd0, 3'b000); // sb  x12, 258(x0)
+        IROM[128] = encode_l(12'd256, 5'd0, 3'b010, 5'd9);  // lw  x9, 256(x0)
+        IROM[129] = encode_s(12'd212, 5'd9, 5'd0, 3'b010);  // sw  x9, 212(x0)
+        
+        IROM[130] = encode_i(12'h5D4, 5'd0, 3'b000, 5'd12); // addi x12, x0, 0x5D4
+        IROM[131] = encode_s(12'd259, 5'd12, 5'd0, 3'b000); // sb  x12, 259(x0)
+        IROM[132] = encode_l(12'd256, 5'd0, 3'b010, 5'd9);  // lw  x9, 256(x0)
+        IROM[133] = encode_s(12'd216, 5'd9, 5'd0, 3'b010);  // sw  x9, 216(x0)
+        
+        // SH - upper bits of x12 are non-zero to check that only the lower half-word is stored
+        IROM[134] = {20'h0005C, 5'd12, 7'b0110111};          // lui x12, 0x5C
+        IROM[135] = encode_i(12'hEEF, 5'd12, 3'b000, 5'd12); // addi x12, x12, -273 -> x12 = 0x0005BEEF
+        IROM[136] = encode_s(12'd260, 5'd12, 5'd0, 3'b001);  // sh  x12, 260(x0)
+        IROM[137] = encode_l(12'd260, 5'd0, 3'b010, 5'd9);   // lw  x9, 260(x0)
+        IROM[138] = encode_s(12'd220, 5'd9, 5'd0, 3'b010);   // sw  x9, 220(x0)
+        
+        IROM[139] = {20'h0005D, 5'd12, 7'b0110111};          // lui x12, 0x5D
+        IROM[140] = encode_i(12'hAFE, 5'd12, 3'b000, 5'd12); // addi x12, x12, -1282 -> x12 = 0x0005CAFE
+        IROM[141] = encode_s(12'd262, 5'd12, 5'd0, 3'b001);  // sh  x12, 262(x0)
+        IROM[142] = encode_l(12'd260, 5'd0, 3'b010, 5'd9);   // lw  x9, 260(x0)
+        IROM[143] = encode_s(12'd224, 5'd9, 5'd0, 3'b010);   // sw  x9, 224(x0)
+        
+        // SW - all 4 bytes are still written
+        IROM[144] = encode_s(12'd264, 5'd12, 5'd0, 3'b010);  // sw  x12, 264(x0)
+        IROM[145] = encode_l(12'd264, 5'd0, 3'b010, 5'd9);   // lw  x9, 264(x0)
+        IROM[146] = encode_s(12'd228, 5'd9, 5'd0, 3'b010);   // sw  x9, 228(x0)
+        
+        IROM[147] = encode_j(21'd0, 5'd0); // jal x0, 0
         // Initialise CPU
         repeat (2) @(negedge CLK);
         RESET = 1'b0;
     end
 
+    // Waveform dump for GTKWave / Surfer / VaporView. Ignored by Vivado's own waveform viewer.
+    initial begin
+        $dumpfile("tb_RV.vcd");
+        $dumpvars(0, tb_RV);
+    end
+
     initial begin
         #100000;
-        $display("TEST TIMEOUT: Only %0d / 41 stores completed", store_count);
+        $display("TEST TIMEOUT: Only %0d / %0d stores completed", store_count, NUM_STORES);
         $finish;
     end
     
