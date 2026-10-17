@@ -209,32 +209,32 @@ module RV #(
     // Instantiate Src_A
     always @(*) 
     begin
-        casez (ALUSrcA)
-            2'b?0 : Src_A = RD1;
+        casez (ALUSrcA_E)
+            2'b?0 : Src_A = RD1_E;
             2'b01 : Src_A = 32'b0;
-            2'b11 : Src_A = PC;
-            default: Src_A = RD1;
+            2'b11 : Src_A = PC_E;
+            default: Src_A = RD1_E;
         endcase
     end
     
     // Instantiate Src_B
     always @(*) 
     begin
-        casez (ALUSrcB)
-            2'b?0 : Src_B = RD2;
+        casez (ALUSrcB_E)
+            2'b?0 : Src_B = RD2_E;
             2'b01 : Src_B = 32'b100;
-            2'b11 : Src_B = ExtImm;
-            default: Src_B = RD2;
+            2'b11 : Src_B = ExtImm_E;
+            default: Src_B = RD2_E;
         endcase
     end
     
     // Instantiate PC_IN
 	always @(*)
 	begin
-        case (PCSrc) 
+        case (PCSrc_E) 
             2'b00: PC_IN = PC + 32'b100;
-            2'b01: PC_IN = PC_Offset;
-            2'b11: PC_IN = (RD1 + ExtImm) & 32'hFFFFFFFE;
+            2'b01: PC_IN = PC_Offset_E;
+            2'b11: PC_IN = (RD1_E + ExtImm_E) & 32'hFFFFFFFE;
             default: PC_IN = PC + 32'b100;
         endcase	
 	end
@@ -242,58 +242,63 @@ module RV #(
 	// Instantiate WE_PC
 	always @(*)
 	begin
-	   if (IsMCycle && Busy)
+	   if (IsMCycle_E && Busy)
 	       WE_PC = 1'b0;
 	   else
 	       WE_PC = 1'b1;
 	end
+
+    // Instantiate ExecResult_E
+    always @ (*) begin
+        if (IsMCycle_E)
+            ExecResult_E = MCycleResultHigh_E ? Result2 : Result1;
+        else
+            ExecResult_E = ALUResult_E;
+    end
 	
 	// Instantiate LoadByte and LoadWord
 	always @(*) begin
-        case (ALUResult[1:0])
-            2'b00: LoadByte = ReadData[7:0];
-            2'b01: LoadByte = ReadData[15:8];
-            2'b10: LoadByte = ReadData[23:16];
-            2'b11: LoadByte = ReadData[31:24];
+        case (ALUResult_W[1:0])
+            2'b00: LoadByte = ReadData_W[7:0];
+            2'b01: LoadByte = ReadData_W[15:8];
+            2'b10: LoadByte = ReadData_W[23:16];
+            2'b11: LoadByte = ReadData_W[31:24];
             default: LoadByte = 8'b0;
         endcase
     
-        case (ALUResult[1])
-            1'b0: LoadHalf = ReadData[15:0];
-            1'b1: LoadHalf = ReadData[31:16];
+        case (ALUResult_W[1])
+            1'b0: LoadHalf = ReadData_W[15:0];
+            1'b1: LoadHalf = ReadData_W[31:16];
             default: LoadHalf = 16'b0;
         endcase
     end
 	
-    // Instantiate Result
+    // Instantiate Result_W
 	always @(*) begin
-        if (MemtoReg) begin
-            case (Funct3)
-                3'b000: Result = {{24{LoadByte[7]}}, LoadByte};     //lb
-                3'b001: Result = {{16{LoadHalf[15]}}, LoadHalf};    //lh
-                3'b010: Result = ReadData;                          //lw
-                3'b100: Result = {24'b0, LoadByte};                 //lbu
-                3'b101: Result = {16'b0, LoadHalf};                 //lhu
-                default: Result = ReadData;
+        if (MemtoReg_W) begin
+            case (Funct3_W)
+                3'b000: Result_W = {{24{LoadByte[7]}}, LoadByte};     //lb
+                3'b001: Result_W = {{16{LoadHalf[15]}}, LoadHalf};    //lh
+                3'b010: Result_W = ReadData_W;                        //lw
+                3'b100: Result_W = {24'b0, LoadByte};                 //lbu
+                3'b101: Result_W = {16'b0, LoadHalf};                 //lhu
+                default: Result_W = ReadData_W;
             endcase
-
        end
-	   else if (IsMCycle)
-	       Result = MCycleResultHigh ? Result2 : Result1;
-	   else
-	       Result = ALUResult;
+         else
+                Result_W = ALUResult_W;
 	end
     
     // Instantiate WriteData_out and MemWrite_out
     always @ (*) begin
-        WriteData_out = WriteData;
+        WriteData_out = WriteData_M;
         MemWrite_out = 4'b0000;
-        if (MemWrite) begin
-            case (Funct3)
+        if (MemWrite_M) begin
+            case (Funct3_M)
                 3'b000: begin
                     // sb
-                    WriteData_out = {4{WriteData[7:0]}};
-                    case (ALUResult[1:0])
+                    WriteData_out = {4{WriteData_M[7:0]}};
+                    case (ALUResult_M[1:0])
                         2'b00: MemWrite_out = 4'b0001;
                         2'b01: MemWrite_out = 4'b0010;
                         2'b10: MemWrite_out = 4'b0100;
@@ -303,8 +308,8 @@ module RV #(
                 end
                 3'b001: begin
                     // sh
-                    WriteData_out = {2{WriteData[15:0]}};
-                    case (ALUResult[1])
+                    WriteData_out = {2{WriteData_M[15:0]}};
+                    case (ALUResult_M[1])
                         1'b0: MemWrite_out = 4'b0011;
                         1'b1: MemWrite_out = 4'b1100;
                         default: MemWrite_out = 4'b0000;
@@ -322,62 +327,62 @@ module RV #(
     RegFile RegFile1( 
                     CLK,
                     WE,
-                    rs1,
-                    rs2,
-                    rd,
+                    rs1_D,
+                    rs2_D,
+                    rd_W,
                     WD,
-                    RD1,
-                    RD2     
+                    RD1_D,
+                    RD2_D
                 );
-                
+
      // Instantiate Extend Module
     Extend Extend1(
                     ImmSrc,
                     InstrImm,
-                    ExtImm
+                    ExtImm_D
                 );
-                
+
     // Instantiate Decoder
     Decoder Decoder1(
                     Opcode,
-                    Funct3,
+                    Funct3_D,
                     Funct7,
-                    PCS,
-                    RegWrite,
-                    MemWrite,
-                    MemtoReg,
-                    ALUSrcA,
-                    ALUSrcB,
+                    PCS_D,
+                    RegWrite_D,
+                    MemWrite_D,
+                    MemtoReg_D,
+                    ALUSrcA_D,
+                    ALUSrcB_D,
                     ImmSrc,
-                    ALUControl,
-                    IsMCycle,
-                    MCycleOp,
-                    MCycleResultHigh
+                    ALUControl_D,
+                    IsMCycle_D,
+                    MCycleOp_D,
+                    MCycleResultHigh_D
                 );
-                
+
     // Instantiate PC_Logic
 	PC_Logic PC_Logic1(
-                    PCS,
-                    Funct3,
-                    ALUFlags,
-                    PCSrc
+                    PCS_E,
+                    Funct3_E,
+                    ALUFlags_E,
+                    PCSrc_E
 		);
-                
-    // Instantiate ALU        
+
+    // Instantiate ALU
     ALU ALU1(
                     Src_A,
                     Src_B,
-                    ALUControl,
-                    ALUResult,
-                    ALUFlags
-                );       
-                
+                    ALUControl_E,
+                    ALUResult_E,
+                    ALUFlags_E
+                );
+
     // Instantiate MCycle
     MCycle #(.width(32)) MCycle1(
                     CLK,
                     RESET,
                     Start,
-                    MCycleOp,
+                    MCycleOp_E,
                     Operand1,
                     Operand2,
                     Result1,
