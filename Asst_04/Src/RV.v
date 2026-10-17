@@ -55,80 +55,79 @@ module RV #(
     // Please read Lab 4 Enhancement: Implementing additional instructions on how to support lb/lbu/lh/lhu/sb/sh
         
     //RV Signals
-    wire [2:0] SizeSel;                 //to support lb/lbu/lh/lhu/sb/sh
-    wire [31:0] ReadData;
-    wire [31:0] WriteData;              // Instantiated by assign below
-    wire MemWrite;                      // Instantiated by decoder
+    wire [2:0] SizeSel;                                     // to support lb/lbu/lh/lhu/sb/sh
 
-    // The signals that are commented out (except CLK) will need to be uncommented and attached a stage suffix for pipelining,
-    //  except if the connection is within the same stage.
+    // ============================ F stage ============================
+    // ProgramCounter signals (the PC port is PC_F, the Instr port is Instr_F)
+    reg WE_PC;                                              // Instantiated in the always loop
+    reg [31:0] PC_IN;                                       // Instantiated in the always loop
 
-    // RegFile signals
-    //wire CLK ;
-    wire WE ;                           // Instantiated by assign below
-    wire [4:0] rs1 ;                    // Instantiated by assign below
-    wire [4:0] rs2 ;                    // Instantiated by assign below
-    wire [4:0] rd ;                     // Instantiated by assign below
-    wire [31:0] WD ;                    // Instantiated by assign below
-    wire [31:0] R15 ;                   // ????
-    wire [31:0] RD1 ;                   // Instantiated by RegFile
-    wire [31:0] RD2 ;                   // Instantiated by RegFile
-    
+    // ============================ D stage ============================
+    // D stage register
+    reg [31:0] Instr_D, PC_D;                               // Instantiated by D stage register
+    // RegFile read signals
+    wire [4:0] rs1_D, rs2_D, rd_D;                          // Instantiated by assign below
+    wire [31:0] RD1_D, RD2_D;                               // Instantiated by RegFile
     // Extend Module signals
-    wire [2:0] ImmSrc ;                 // Instantiated by decoder
-    wire [24:0] InstrImm ;              // Instantiated by assign below
-    wire [31:0] ExtImm ;                // Instantiated by Extend
-    
+    wire [2:0] ImmSrc;                                      // Instantiated by Decoder
+    wire [24:0] InstrImm;                                   // Instantiated by assign below
+    wire [31:0] ExtImm_D;                                   // Instantiated by Extend
     // Decoder signals
-    wire [6:0] Opcode ;                 // Instantiated by assign below
-    wire [2:0] Funct3 ;                 // Instantiated by assign below
-    wire [6:0] Funct7 ;                 // Instantiated by assign below
-    wire [1:0] PCS;                     // Instantiated by decoder
-    wire RegWrite ;                     // Instantiated by decoder
-    //wire MemWrite ;
-    wire MemtoReg ;                     // Instantiated by decoder
-    wire [1:0] ALUSrcA ;                // Instantiated by decoder
-    wire [1:0] ALUSrcB ;                // Instantiated by decoder
-    //wire [2:0] ImmSrc ;
-    wire [3:0] ALUControl ;             // Instantiated by decoder
-    wire IsMCycle;                      // Instantiated by decoder
-    wire MCycleResultHigh;              // Instantiated by decoder
+    wire [6:0] Opcode, Funct7;                              // Instantiated by assign below
+    wire [2:0] Funct3_D;                                    // Instantiated by assign below
+    wire [1:0] PCS_D, ALUSrcA_D, ALUSrcB_D, MCycleOp_D;     // Instantiated by Decoder
+    wire [3:0] ALUControl_D;                                // Instantiated by Decoder
+    wire RegWrite_D, MemWrite_D, MemtoReg_D;                // Instantiated by Decoder
+    wire IsMCycle_D, MCycleResultHigh_D;                    // Instantiated by Decoder
 
-    // PC_Logic signals
-    //wire [1:0] PCS
-    //wire [2:0] Funct3;
-    //wire [2:0] ALUFlags;
-    wire [1:0] PCSrc;                   // Instantiated by PC_Logic
-      
+    // ============================ E stage ============================
+    // E stage register
+    reg [31:0] PC_E, RD1_E, RD2_E, ExtImm_E;                // Instantiated by E stage register
+    reg [4:0] rd_E;                                         // Instantiated by E stage register
+    reg [2:0] Funct3_E;                                     // Instantiated by E stage register
+    reg [1:0] PCS_E, ALUSrcA_E, ALUSrcB_E, MCycleOp_E;      // Instantiated by E stage register
+    reg [3:0] ALUControl_E;                                 // Instantiated by E stage register
+    reg RegWrite_E, MemWrite_E, MemtoReg_E;                 // Instantiated by E stage register
+    reg IsMCycle_E, MCycleResultHigh_E;                     // Instantiated by E stage register
     // ALU signals
-    reg [31:0] Src_A ;                 // Instantiated in the alway loop
-    reg [31:0] Src_B ;                 // Instantiated in the alway loop
-    //wire [3:0] ALUControl ;
-    //wire [31:0] ALUResult ;
-    wire [2:0] ALUFlags;                // Instantiated by PC_Logic
-    
-    // MCycle signals   
-    wire Start;                         // Instantiated by assign below
-    wire [1:0] MCycleOp;                // Instantiated by Decoder
-    wire [31:0] Operand1;               // Instantiated by assign below
-    wire [31:0] Operand2;               // Instantiated by assign below
-    wire [31:0] Result1;                // Instantiated by MCycle
-    wire [31:0] Result2;                // Instantiated by MCycle
-    wire Busy;                          // Instantiated by MCycle
-    
-    // ProgramCounter signals
-    //wire CLK ;
-    //wire RESET ;
-    reg WE_PC ;                         // Instantiated in the alway loop
-    reg [31:0] PC_IN ;                  // Instantiated in the alway loop
-    //wire [31:0] PC ; 
-            
-    // Other internal signals here
-    wire [31:0] PC_Offset ;          
-    reg [31:0] Result ;                  // Instantiated by assign below
-    reg [7:0] LoadByte;                  // Instantiated in the alway loop
-    reg [15:0] LoadHalf;
-    
+    reg [31:0] Src_A, Src_B;                                // Instantiated in the always loop
+    wire [31:0] ALUResult_E;                                // Instantiated by ALU
+    wire [2:0] ALUFlags_E;                                  // Instantiated by ALU
+    // PC_Logic signals
+    wire [1:0] PCSrc_E;                                     // Instantiated by PC_Logic
+    wire [31:0] PC_Offset_E;                                // Instantiated by assign below
+    // MCycle signals
+    wire Start;                                             // Instantiated by assign below
+    wire [31:0] Operand1, Operand2;                         // Instantiated by assign below
+    wire [31:0] Result1, Result2;                           // Instantiated by MCycle
+    wire Busy;                                              // Instantiated by MCycle
+    // Stage outputs
+    reg [31:0] ExecResult_E;                                // ALU or MCycle result, instantiated in the always loop
+    wire [31:0] WriteData_E;                                // Instantiated by assign below
+
+    // ============================ M stage ============================
+    // M stage register
+    reg [31:0] ALUResult_M, WriteData_M;                    // Instantiated by M stage register
+    reg [4:0] rd_M;                                         // Instantiated by M stage register
+    reg [2:0] Funct3_M;                                     // Instantiated by M stage register
+    reg RegWrite_M, MemWrite_M, MemtoReg_M;                 // Instantiated by M stage register
+    // Data memory signals
+    wire [31:0] ReadData_M;                                 // Instantiated by assign below
+
+    // ============================ W stage ============================
+    // W stage register
+    reg [31:0] ALUResult_W, ReadData_W;                     // Instantiated by W stage register
+    reg [4:0] rd_W;                                         // Instantiated by W stage register
+    reg [2:0] Funct3_W;                                     // Instantiated by W stage register
+    reg RegWrite_W, MemtoReg_W;                             // Instantiated by W stage register
+    // Load extraction and result signals
+    reg [7:0] LoadByte;                                     // Instantiated in the always loop
+    reg [15:0] LoadHalf;                                    // Instantiated in the always loop
+    reg [31:0] Result_W;                                    // Instantiated in the always loop
+    // RegFile write signals
+    wire WE;                                                // Instantiated by assign below
+    wire [31:0] WD;                                         // Instantiated by assign below
+        
     assign MemRead = MemtoReg;           // This is needed for the proper functionality of some devices such as UART CONSOLE
 
     assign ReadData = ReadData_in;       // Change datapath as appropriate if supporting lb/lbu/lh/lhu
@@ -136,7 +135,8 @@ module RV #(
                                          // supporting lb/sb/lbu/lh/sh/lhu/lw/sw. Hint: funct3
 
     // todo: other datapath connections here
-    assign WriteData = RD2;
+    assign ALUResult = ALUResult_M;
+    assign WriteData = RD2_E;
     
     assign WE = RegWrite;
     assign rs1 = Instr[19:15];
@@ -156,7 +156,7 @@ module RV #(
     assign Start = IsMCycle;
     assign Operand1 = RD1;
     assign Operand2 = RD2;
-
+    
     // Instantiate Src_A
     always @(*) 
     begin
