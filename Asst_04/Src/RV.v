@@ -101,6 +101,7 @@ module RV #(
     wire [31:0] Operand1, Operand2;                         // Instantiated by assign below
     wire [31:0] Result1, Result2;                           // Instantiated by MCycle
     wire Busy;                                              // Instantiated by MCycle
+    wire Stall;                                             // MCycle still computing: hold F, D, E. Instantiated by assign below
     // Stage outputs
     reg [31:0] ExecResult_E;                                // ALU or MCycle result, instantiated in the always loop
     wire [31:0] WriteData_E;                                // Instantiated by assign below
@@ -144,9 +145,15 @@ module RV #(
     assign rd_D  = Instr_D[11:7];
     assign InstrImm = Instr_D[31:7];
 
-    always @ (*) begin
-        Instr_D <= Instr;
-        PC_D <= PC;
+    // D stage register
+    always @ (posedge CLK) begin
+        if (RESET) begin
+            Instr_D <= 32'h0000_0013;   // nop to pass illegal instruction check
+            PC_D <= 32'b0;
+        end else if (!Stall) begin
+            Instr_D <= Instr;
+            PC_D <= PC;
+        end
     end
 
     // ============================ E stage ============================
@@ -156,26 +163,47 @@ module RV #(
     assign Start = IsMCycle_E;
     assign Operand1 = RD1_E;
     assign Operand2 = RD2_E;
+    assign Stall = IsMCycle_E & Busy;
     
     // E stage register
-    always @ (*) begin
-        PCS_E <= PCS_D;
-        RD1_E <= RD1_D;
-        RD2_E <= RD2_D;
-        RegWrite_E <= RegWrite_D;
-        MemtoReg_E <= MemtoReg_D;
-        MemWrite_E <= MemWrite_D;
-        ALUControl_E <= ALUControl_D;
-        ALUSrcA_E <= ALUSrcA_D;
-        ALUSrcB_E <= ALUSrcB_D;
-        ExtImm_E <= ExtImm_D;
-        rd_E <= rd_D;
-        PC_E <= PC_D;
-        Funct3_E <= Funct3_D;
-        // Mcycle
-        IsMCycle_E <= IsMCycle_D;
-        MCycleOp_E <= MCycleOp_D;
-        MCycleResultHigh_E <= MCycleResultHigh_D;
+    always @ (posedge CLK) begin
+        if (RESET) begin
+            PCS_E <= 2'b0;
+            RD1_E <= 32'b0;
+            RD2_E <= 32'b0;
+            RegWrite_E <= 1'b0;
+            MemtoReg_E <= 1'b0;
+            MemWrite_E <= 1'b0;
+            ALUControl_E <= 4'b0;
+            ALUSrcA_E <= 2'b0;
+            ALUSrcB_E <= 2'b0;
+            ExtImm_E <= 32'b0;
+            rd_E <= 5'b0;
+            PC_E <= 32'b0;
+            Funct3_E <= 3'b0;
+            // Mcycle
+            IsMCycle_E <= 1'b0;
+            MCycleOp_E <= 2'b0;
+            MCycleResultHigh_E <= 1'b0;
+        end else if (!Stall) begin
+            PCS_E <= PCS_D;
+            RD1_E <= RD1_D;
+            RD2_E <= RD2_D;
+            RegWrite_E <= RegWrite_D;
+            MemtoReg_E <= MemtoReg_D;
+            MemWrite_E <= MemWrite_D;
+            ALUControl_E <= ALUControl_D;
+            ALUSrcA_E <= ALUSrcA_D;
+            ALUSrcB_E <= ALUSrcB_D;
+            ExtImm_E <= ExtImm_D;
+            rd_E <= rd_D;
+            PC_E <= PC_D;
+            Funct3_E <= Funct3_D;
+            // Mcycle
+            IsMCycle_E <= IsMCycle_D;
+            MCycleOp_E <= MCycleOp_D;
+            MCycleResultHigh_E <= MCycleResultHigh_D;
+        end
     end
 
     // ============================ M stage ============================
@@ -183,27 +211,54 @@ module RV #(
     assign MemRead = MemtoReg_M;           // This is needed for the proper functionality of some devices such as UART CONSOLE
     assign ALUResult = ALUResult_M;        // Data memory address to the Wrapper
 
-    always @ (*) begin
-        RegWrite_M <= RegWrite_E;
-        MemtoReg_M <= MemtoReg_E;
-        MemWrite_M <= MemWrite_E;
-        ALUResult_M <= ExecResult_E;
-        WriteData_M <= WriteData_E;
-        rd_M <= rd_E;
-        Funct3_M <= Funct3_E;
+    // M stage register
+    always @ (posedge CLK) begin
+        if (RESET) begin
+            RegWrite_M <= 1'b0;
+            MemtoReg_M <= 1'b0;
+            MemWrite_M <= 1'b0;
+            ALUResult_M <= 32'b0;
+            WriteData_M <= 32'b0;
+            rd_M <= 5'b0;
+            Funct3_M <= 3'b0;
+        end else if (Stall) begin
+            // MCycle instruction stays in E, nop prevents writes in M or W stages
+            RegWrite_M <= 1'b0;
+            MemtoReg_M <= 1'b0;
+            MemWrite_M <= 1'b0;
+        end else begin
+            RegWrite_M <= RegWrite_E;
+            MemtoReg_M <= MemtoReg_E;
+            MemWrite_M <= MemWrite_E;
+            ALUResult_M <= ExecResult_E;
+            WriteData_M <= WriteData_E;
+            rd_M <= rd_E;
+            Funct3_M <= Funct3_E;
+        end
     end
 
     // ============================ W stage ============================
     assign WE = RegWrite_W;
     assign WD = Result_W;
 
-    always @ (*) begin
-        RegWrite_W <= RegWrite_M;
-        MemtoReg_W <= MemtoReg_M;
-        ReadData_W <= ReadData_M;
-        Funct3_W <= Funct3_M;
-        ALUResult_W <= ALUResult_M;
-        rd_W <= rd_M;
+    // W stage register
+    always @ (posedge CLK) begin
+        if (RESET) begin
+            RegWrite_W <= 1'b0;
+            MemtoReg_W <= 1'b0;
+            ReadData_W <= 32'b0;
+            Funct3_W <= 3'b0;
+            ALUResult_W <= 32'b0;
+            rd_W <= 5'b0;
+        end
+        else begin
+            RegWrite_W <= RegWrite_M;
+            MemtoReg_W <= MemtoReg_M;
+            ReadData_W <= ReadData_M;
+            Funct3_W <= Funct3_M;
+            ALUResult_W <= ALUResult_M;
+            rd_W <= rd_M;
+        end
     end
 
     // Instantiate Src_A
