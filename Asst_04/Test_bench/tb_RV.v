@@ -6,7 +6,7 @@ module tb_RV(
     
     localparam [31:0] BASE = 32'h0040_0000;
     localparam IROM_DEPTH_BITS = 11;	//11 for 512 words. Change if your program is larger.
-    localparam NOPS = 2;                // nops after every test instruction
+    localparam NOPS = 0;                // nops after every test instruction
     localparam STRIDE = NOPS + 1;       // IROM slots per test instruction: instruction + NOPS
     localparam DMEM_DEPTH_BITS = 9;		//9 for 128 words. Change if your data (const+variable) is larger, and in C/Assembly to set STACK_INIT appropriately.
     
