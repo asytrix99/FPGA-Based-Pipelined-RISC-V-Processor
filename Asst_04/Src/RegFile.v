@@ -54,8 +54,7 @@ module RegFile(
     	RD2 <= (rs2 == 5'b00000) ? 32'd0 : RegBank[rs2] ;  
     end 
     
-    // write on the falling edge, so that W writes before D reads in the same cycle (2 nops instead of 3 for a data hazard)
-    always@(negedge CLK)
+    always@(posedge  CLK)
     begin
         if((rd != 5'b00000) & (WE))
             RegBank[rd] <= WD ;
