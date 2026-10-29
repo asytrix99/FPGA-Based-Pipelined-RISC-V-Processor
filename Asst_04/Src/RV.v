@@ -449,7 +449,11 @@ module RV #(
 
 
     // Stalling and Flushing
-    assign lwStall = ((rs1_D == rd_E) | (rs2_D == rd_E)) & MemtoReg_E & (rd_E != 5'd0);
+    assign lwStall = MemtoReg_E & (rd_E != 5'd0) & ((rs1_D == rd_E) & UsesRs1D | (rs2_D == rd_E) & UsesRs2D);
+                        
+    assign UsesRs1D = ~(Opcode == 7'b0110111 | Opcode == 7'b0010111 | Opcode == 7'b1100111);
+    assign UsesRs2D = (Opcode == 7'b1100011 | Opcode == 7'b0110011);
+    
     assign StallF = lwStall;
     assign StallD = lwStall;
     assign FlushD = |PCSrc_E;
