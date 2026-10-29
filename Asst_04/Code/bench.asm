@@ -3,10 +3,10 @@ _start:
         j       main
 
 main:
-        addi    sp, sp, -112
-        sw      ra, 108(sp)
-        sw      s0, 104(sp)
-        addi    s0, sp, 112
+        addi    sp, sp, -128
+        sw      ra, 124(sp)
+        sw      s0, 120(sp)
+        addi    s0, sp, 128
         li      a0, 0
         sw      a0, -12(s0)
         lui     a1, 1048560
@@ -42,7 +42,7 @@ main:
         j       .LBB1_2
 .LBB1_2:
         lw      a0, -48(s0)
-        beqz    a0, .LBB1_38
+        beqz    a0, .LBB1_50
         j       .LBB1_3
 .LBB1_3:
         lw      a0, -40(s0)
@@ -54,164 +54,210 @@ main:
         slli    a0, a0, 24
         srli    a0, a0, 26
         sw      a0, -56(s0)
-        lw      a0, -52(s0)
-        li      a1, 3
-        bne     a0, a1, .LBB1_5
+        lw      a0, -56(s0)
+        sw      a0, -60(s0)
+        lbu     a0, -39(s0)
+        andi    a0, a0, 64
+        beqz    a0, .LBB1_11
         j       .LBB1_4
 .LBB1_4:
-        lw      a0, -56(s0)
-        slli    a0, a0, 4
+        li      a0, 1
         sw      a0, -56(s0)
-        j       .LBB1_13
+        lw      a0, -52(s0)
+        li      a1, 3
+        bne     a0, a1, .LBB1_6
+        j       .LBB1_5
 .LBB1_5:
+        li      a0, 63
+        sw      a0, -60(s0)
+        j       .LBB1_10
+.LBB1_6:
         lw      a0, -52(s0)
         li      a1, 1
-        bne     a0, a1, .LBB1_9
-        j       .LBB1_6
-.LBB1_6:
-        lw      a0, -56(s0)
-        li      a1, 25
-        bltu    a0, a1, .LBB1_8
+        bne     a0, a1, .LBB1_8
         j       .LBB1_7
 .LBB1_7:
         li      a0, 24
-        sw      a0, -56(s0)
-        j       .LBB1_8
+        sw      a0, -60(s0)
+        j       .LBB1_9
 .LBB1_8:
-        j       .LBB1_12
+        li      a0, 39
+        sw      a0, -60(s0)
+        j       .LBB1_9
 .LBB1_9:
-        lw      a0, -56(s0)
-        li      a1, 40
-        bltu    a0, a1, .LBB1_11
         j       .LBB1_10
 .LBB1_10:
-        li      a0, 39
-        sw      a0, -56(s0)
         j       .LBB1_11
 .LBB1_11:
+        lw      a0, -56(s0)
+        sw      a0, -64(s0)
         j       .LBB1_12
 .LBB1_12:
+        lw      a1, -64(s0)
+        lw      a0, -60(s0)
+        bltu    a0, a1, .LBB1_49
         j       .LBB1_13
 .LBB1_13:
-        lui     a0, %hi(CYCLECOUNT_ADDR)
-        lw      a0, %lo(CYCLECOUNT_ADDR)(a0)
-        lw      a0, 0(a0)
-        sw      a0, -72(s0)
+        lw      a0, -64(s0)
+        sw      a0, -68(s0)
         lw      a0, -52(s0)
-        bnez    a0, .LBB1_15
+        li      a1, 3
+        bne     a0, a1, .LBB1_15
         j       .LBB1_14
 .LBB1_14:
-        lw      a0, -56(s0)
-        call    fib_iter
-        sw      a0, -60(s0)
-        j       .LBB1_22
+        lw      a0, -68(s0)
+        slli    a0, a0, 4
+        sw      a0, -68(s0)
+        j       .LBB1_23
 .LBB1_15:
         lw      a0, -52(s0)
         li      a1, 1
-        bne     a0, a1, .LBB1_17
+        bne     a0, a1, .LBB1_19
         j       .LBB1_16
 .LBB1_16:
-        lw      a0, -56(s0)
-        call    fib_rec
-        sw      a0, -60(s0)
-        j       .LBB1_21
+        lw      a0, -68(s0)
+        li      a1, 25
+        bltu    a0, a1, .LBB1_18
+        j       .LBB1_17
 .LBB1_17:
-        lw      a0, -52(s0)
-        li      a1, 2
-        bne     a0, a1, .LBB1_19
+        li      a0, 24
+        sw      a0, -68(s0)
         j       .LBB1_18
 .LBB1_18:
-        lw      a0, -56(s0)
-        call    fib_table
-        sw      a0, -60(s0)
-        j       .LBB1_20
+        j       .LBB1_22
 .LBB1_19:
-        lw      a0, -56(s0)
-        call    count_primes
-        sw      a0, -60(s0)
+        lw      a0, -68(s0)
+        li      a1, 40
+        bltu    a0, a1, .LBB1_21
         j       .LBB1_20
 .LBB1_20:
+        li      a0, 39
+        sw      a0, -68(s0)
         j       .LBB1_21
 .LBB1_21:
         j       .LBB1_22
 .LBB1_22:
+        j       .LBB1_23
+.LBB1_23:
         lui     a0, %hi(CYCLECOUNT_ADDR)
         lw      a0, %lo(CYCLECOUNT_ADDR)(a0)
         lw      a0, 0(a0)
-        lw      a1, -72(s0)
-        sub     a0, a0, a1
-        sw      a0, -76(s0)
+        sw      a0, -84(s0)
         lw      a0, -52(s0)
-        li      a1, 3
-        bne     a0, a1, .LBB1_24
-        j       .LBB1_23
-.LBB1_23:
-        lw      a0, -56(s0)
-        call    sieve_count
-        lw      a1, -60(s0)
-        xor     a0, a0, a1
-        seqz    a0, a0
-        sw      a0, -68(s0)
-        j       .LBB1_31
+        bnez    a0, .LBB1_25
+        j       .LBB1_24
 .LBB1_24:
-        lw      a0, -56(s0)
+        lw      a0, -68(s0)
         call    fib_iter
-        sw      a0, -64(s0)
-        lw      a0, -56(s0)
-        call    fib_table
-        lw      a1, -64(s0)
-        li      a2, 0
-        sw      a2, -88(s0)
-        bne     a0, a1, .LBB1_26
-        j       .LBB1_25
+        sw      a0, -72(s0)
+        j       .LBB1_32
 .LBB1_25:
-        lw      a0, -60(s0)
-        lw      a1, -64(s0)
-        xor     a0, a0, a1
-        seqz    a0, a0
-        sw      a0, -88(s0)
+        lw      a0, -52(s0)
+        li      a1, 1
+        bne     a0, a1, .LBB1_27
         j       .LBB1_26
 .LBB1_26:
-        lw      a0, -88(s0)
-        andi    a0, a0, 1
-        sw      a0, -68(s0)
-        lw      a1, -56(s0)
-        li      a0, 24
-        bltu    a0, a1, .LBB1_30
-        j       .LBB1_27
-.LBB1_27:
         lw      a0, -68(s0)
-        li      a1, 0
-        sw      a1, -92(s0)
-        beqz    a0, .LBB1_29
+        call    fib_rec
+        sw      a0, -72(s0)
+        j       .LBB1_31
+.LBB1_27:
+        lw      a0, -52(s0)
+        li      a1, 2
+        bne     a0, a1, .LBB1_29
         j       .LBB1_28
 .LBB1_28:
-        lw      a0, -56(s0)
-        call    fib_rec
-        lw      a1, -64(s0)
-        xor     a0, a0, a1
-        seqz    a0, a0
-        sw      a0, -92(s0)
-        j       .LBB1_29
+        lw      a0, -68(s0)
+        call    fib_table
+        sw      a0, -72(s0)
+        j       .LBB1_30
 .LBB1_29:
-        lw      a0, -92(s0)
-        andi    a0, a0, 1
-        sw      a0, -68(s0)
+        lw      a0, -68(s0)
+        call    count_primes
+        sw      a0, -72(s0)
         j       .LBB1_30
 .LBB1_30:
         j       .LBB1_31
 .LBB1_31:
-        lw      a0, -76(s0)
-        li      a1, 40
-        mul     a0, a0, a1
+        j       .LBB1_32
+.LBB1_32:
+        lui     a0, %hi(CYCLECOUNT_ADDR)
+        lw      a0, %lo(CYCLECOUNT_ADDR)(a0)
+        lw      a0, 0(a0)
+        lw      a1, -84(s0)
+        sub     a0, a0, a1
+        sw      a0, -88(s0)
+        lw      a0, -52(s0)
+        li      a1, 3
+        bne     a0, a1, .LBB1_34
+        j       .LBB1_33
+.LBB1_33:
+        lw      a0, -68(s0)
+        call    sieve_count
+        lw      a1, -72(s0)
+        xor     a0, a0, a1
+        seqz    a0, a0
         sw      a0, -80(s0)
+        j       .LBB1_41
+.LBB1_34:
+        lw      a0, -68(s0)
+        call    fib_iter
+        sw      a0, -76(s0)
+        lw      a0, -68(s0)
+        call    fib_table
+        lw      a1, -76(s0)
+        li      a2, 0
+        sw      a2, -100(s0)
+        bne     a0, a1, .LBB1_36
+        j       .LBB1_35
+.LBB1_35:
+        lw      a0, -72(s0)
+        lw      a1, -76(s0)
+        xor     a0, a0, a1
+        seqz    a0, a0
+        sw      a0, -100(s0)
+        j       .LBB1_36
+.LBB1_36:
+        lw      a0, -100(s0)
+        andi    a0, a0, 1
+        sw      a0, -80(s0)
+        lw      a1, -68(s0)
+        li      a0, 24
+        bltu    a0, a1, .LBB1_40
+        j       .LBB1_37
+.LBB1_37:
         lw      a0, -80(s0)
+        li      a1, 0
+        sw      a1, -104(s0)
+        beqz    a0, .LBB1_39
+        j       .LBB1_38
+.LBB1_38:
+        lw      a0, -68(s0)
+        call    fib_rec
+        lw      a1, -76(s0)
+        xor     a0, a0, a1
+        seqz    a0, a0
+        sw      a0, -104(s0)
+        j       .LBB1_39
+.LBB1_39:
+        lw      a0, -104(s0)
+        andi    a0, a0, 1
+        sw      a0, -80(s0)
+        j       .LBB1_40
+.LBB1_40:
+        j       .LBB1_41
+.LBB1_41:
+        lw      a0, -88(s0)
+        li      a1, 25
+        mul     a0, a0, a1
+        sw      a0, -92(s0)
+        lw      a0, -92(s0)
         lui     a1, 67109
         addi    a1, a1, -557
         mulhu   a0, a0, a1
         srli    a0, a0, 6
-        sw      a0, -84(s0)
-        lw      a0, -68(s0)
+        sw      a0, -96(s0)
+        lw      a0, -80(s0)
         snez    a1, a0
         lw      a0, -52(s0)
         slli    a0, a0, 2
@@ -221,82 +267,82 @@ main:
         sw      a0, 0(a1)
         lbu     a0, -39(s0)
         andi    a0, a0, 128
-        beqz    a0, .LBB1_33
-        j       .LBB1_32
-.LBB1_32:
-        lw      a0, -84(s0)
+        beqz    a0, .LBB1_43
+        j       .LBB1_42
+.LBB1_42:
+        lw      a0, -96(s0)
         call    to_bcd
         lw      a1, -20(s0)
         sw      a0, 0(a1)
-        j       .LBB1_34
-.LBB1_33:
-        lw      a0, -60(s0)
+        j       .LBB1_44
+.LBB1_43:
+        lw      a0, -72(s0)
         call    to_bcd
         lw      a1, -20(s0)
         sw      a0, 0(a1)
-        j       .LBB1_34
-.LBB1_34:
+        j       .LBB1_44
+.LBB1_44:
         lw      a0, -52(s0)
         call    send_workload_name
         li      a0, 32
-        sw      a0, -96(s0)
+        sw      a0, -108(s0)
         call    uart_send_char
         li      a0, 78
-        sw      a0, -104(s0)
+        sw      a0, -116(s0)
         call    uart_send_char
         li      a0, 61
-        sw      a0, -100(s0)
+        sw      a0, -112(s0)
         call    uart_send_char
-        lw      a0, -56(s0)
+        lw      a0, -68(s0)
         call    uart_send_dec
-        lw      a0, -96(s0)
+        lw      a0, -108(s0)
         call    uart_send_char
         li      a0, 82
         call    uart_send_char
-        lw      a0, -100(s0)
+        lw      a0, -112(s0)
         call    uart_send_char
-        lw      a0, -60(s0)
+        lw      a0, -72(s0)
         call    uart_send_dec
-        lw      a0, -96(s0)
+        lw      a0, -108(s0)
         call    uart_send_char
         li      a0, 67
-        sw      a0, -108(s0)
+        sw      a0, -120(s0)
         call    uart_send_char
         li      a0, 89
         call    uart_send_char
+        lw      a0, -120(s0)
+        call    uart_send_char
+        lw      a0, -112(s0)
+        call    uart_send_char
+        lw      a0, -88(s0)
+        call    uart_send_dec
         lw      a0, -108(s0)
         call    uart_send_char
-        lw      a0, -100(s0)
-        call    uart_send_char
-        lw      a0, -76(s0)
-        call    uart_send_dec
-        lw      a0, -96(s0)
-        call    uart_send_char
-        lw      a0, -104(s0)
+        lw      a0, -116(s0)
         call    uart_send_char
         li      a0, 83
         call    uart_send_char
-        lw      a0, -100(s0)
+        lw      a0, -112(s0)
+        call    uart_send_char
+        lw      a0, -92(s0)
+        call    uart_send_dec
+        lw      a0, -108(s0)
         call    uart_send_char
         lw      a0, -80(s0)
-        call    uart_send_dec
-        lw      a0, -96(s0)
-        call    uart_send_char
-        lw      a0, -68(s0)
-        beqz    a0, .LBB1_36
-        j       .LBB1_35
-.LBB1_35:
+        beqz    a0, .LBB1_46
+        j       .LBB1_45
+.LBB1_45:
         li      a0, 80
         call    uart_send_char
         li      a0, 65
         call    uart_send_char
         li      a0, 83
-        sw      a0, -112(s0)
+        sw      a0, -124(s0)
         call    uart_send_char
-        lw      a0, -112(s0)
+        lw      a0, -124(s0)
         call    uart_send_char
-        j       .LBB1_37
-.LBB1_36:
+        j       .LBB1_47
+.LBB1_46:
         li      a0, 70
         call    uart_send_char
         li      a0, 65
@@ -305,16 +351,23 @@ main:
         call    uart_send_char
         li      a0, 76
         call    uart_send_char
-        j       .LBB1_37
-.LBB1_37:
+        j       .LBB1_47
+.LBB1_47:
         li      a0, 13
         call    uart_send_char
         li      a0, 10
         call    uart_send_char
-        j       .LBB1_38
-.LBB1_38:
-        lui     a0, 305
-        addi    a0, a0, 720
+        j       .LBB1_48
+.LBB1_48:
+        lw      a0, -64(s0)
+        addi    a0, a0, 1
+        sw      a0, -64(s0)
+        j       .LBB1_12
+.LBB1_49:
+        j       .LBB1_50
+.LBB1_50:
+        lui     a0, 488
+        addi    a0, a0, 1152
         call    delay
         j       .LBB1_1
 
