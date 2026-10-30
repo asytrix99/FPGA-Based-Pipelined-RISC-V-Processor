@@ -73,6 +73,8 @@ CG3207_Assignment_2/
    - Implement Division logic and Radix 2 booth multiplier for enchancement
 - `Wrapper.v`
    - Change DEPTH_BITS to accomodate all required instructions
+- `TOP_Nexys.vhd`
+   - CPU clock from the Clocking Wizard (`clk_wiz_0`) instead of the clock divider. See [Clock](#clock)
 
 ### Testbench Files
 - `tb_Decoder`
@@ -91,11 +93,12 @@ CG3207_Assignment_2/
 
 - #### `bench.asm`
     RISC-V assembly generated from `bench.c` using [Godbolt Compiler Explorer](https://godbolt.org/) with
-    `RISC-V rv32gc clang 20.1.0` and `-DCLK_DIV_BITS=<n>` matching the bitstream. Zero-initialised arrays
+    `RISC-V rv32gc clang 20.1.0` and `-DCLK_PERIOD_PS=<period>` matching the bitstream. Zero-initialised arrays
     are emitted as `.zero N`, which is replaced by `.space N` for RARS.
 
 - #### `bench_results.md`
-    Board measurements of `bench.c` on the single-cycle and the pipelined CPU, and the comparison at each CPU's f_max.
+    Board measurements of `bench.c` on the single-cycle and the pipelined CPU: cycle counts, f_max, and time with
+    the Clocking Wizard.
 
 - #### `accel.c`
     C program used for the processor demonstration. Reads and processes acceleromter data and outputs
@@ -139,17 +142,32 @@ the workload, so the same program can be compared on the single-cycle and the pi
 - **SW15:** seven-segment display shows the result (off) or the time in us (on), in decimal
 - **Pushbuttons:** run again. The benchmark also runs at start-up and whenever a switch changes
 - **LEDs:** LED0 = PASS, LED1 = FAIL, LED3-2 = workload
-- **UART:** one line per run, e.g. `FIBI N=39 R=63245986 CYC=1139 NS=45560 PASS`
+- **UART:** one line per run, e.g. `FIBI N=39 R=63245986 CYC=1139 NS=17085 PASS` (pipelined, 66.667 MHz)
 
-`CLK_DIV_BITS` in `bench.c` must match `TOP_Nexys.vhd`, so that `NS=` is correct. The CPU clock is
-100 MHz / 2^(CLK_DIV_BITS + 1), or 100 MHz when `CLK_DIV_BITS` = 0. Only `int` data is used, so there are no
-`sb` / `sh` and the program also runs on the Assignment 3 CPU.
+Only `int` data is used, so there are no `sb` / `sh` and the program also runs on the Assignment 3 CPU.
 
 > `_start()` must stay the first function in `bench.c`. It sets `sp` before `main()` builds its stack frame.
 > Setting `sp` inside `main()` is too late: the compiler may address `main`'s locals through `s0`, which is
 > computed from `sp` = 0, and the program then writes nothing to the outputs.
 
-See [Code/bench_results.md](Code/bench_results.md) for the single-cycle vs pipelined results.
+### Clock
+`TOP_Nexys.vhd` takes the CPU clock from a Clocking Wizard IP, which is not in the repository. Add it to the
+Vivado project (IP Catalog > Clocking Wizard) with:
+- **Component name:** `clk_wiz_0`
+- **Input:** 100 MHz, source = Global buffer
+- **`clk_out1`:** 100 MHz, for the UART, seven-segment display, OLED and accelerometer
+- **`clk_out2`:** the CPU clock, from the table below
+
+`clk_out2` is the fastest clock below the CPU's f_max that divides evenly into 100 MHz, so that the paths between
+the CPU and the peripherals also meet timing. Compile `bench.c` with the matching period, so that `NS=` is correct:
+
+| CPU | `clk_out2` | Godbolt compiler options |
+|---|---|---|
+| Single-cycle (Assignment 3) | 40 MHz | `-DCLK_PERIOD_PS=25000` |
+| Pipelined | 66.667 MHz | `-DCLK_PERIOD_PS=15000` |
+
+Without `CLK_PERIOD_PS`, `bench.c` falls back to `CLK_DIV_BITS` (default 1, 25 MHz) for the old clock divider,
+where the CPU clock is 100 MHz / 2^(CLK_DIV_BITS + 1), or 100 MHz when `CLK_DIV_BITS` = 0.
 
 ## Demo Program
 The demo program reads a 32-bit accelerometer value with the following format:

@@ -61,7 +61,7 @@ entity TOP is
 			RX 				: in  STD_LOGIC;	-- UART Rx
 			PAUSE			: in  STD_LOGIC;  	-- Pause -> BTNU (Up push button)
 			RESET			: in  STD_LOGIC; 	-- Reset -> BTND (Down push button)
-			CLK_undiv		: in  STD_LOGIC; 	-- 100MHz clock. Converted to a lower frequency using DIV_PROCESS before being fed to the Wrapper.
+			CLK_undiv		: in  STD_LOGIC; 	-- 100MHz clock. Fed to clk_wiz_0, which makes the peripheral and CPU clocks.
 			PMOD_CS      	: out STD_LOGIC;
 			PMOD_MOSI    	: out STD_LOGIC;
 			PMOD_SCK     	: out STD_LOGIC;
@@ -82,7 +82,7 @@ architecture arch_TOP of TOP is
 ----------------------------------------------------------------
 -- TOP Constants
 ----------------------------------------------------------------
-constant CLK_DIV_BITS : integer := 1; 	-- Set this to 26 for a ~1Hz clock. 0 for a 100MHz clock. Should not exceed 26. 
+constant CLK_DIV_BITS : integer := 1; 	-- Not used: the CPU clock is clk_out2 of clk_wiz_0, set in the Clocking Wizard IP. 
 										-- There is no need to change it for simulation, as this entity/module should not be simulated
 										-- If this is set to less than 17, you might need a software delay loop between successive reads / writes to/from UART.
 
@@ -144,6 +144,26 @@ signal ACCEL_Data 			: STD_LOGIC_VECTOR(31 downto 0);
 signal ACCEL_DReady 		: STD_LOGIC;
 
 signal	CLK					: STD_LOGIC;
+
+----------------------------------------------------------------------------
+-- Clocking wizard component (IP)
+----------------------------------------------------------------------------
+component clk_wiz_0 is
+		Port 
+		(
+			clk_out1			: out STD_LOGIC;
+			clk_out2			: out STD_LOGIC;
+			reset				: in  STD_LOGIC;
+			locked				: out STD_LOGIC;
+			clk_in1				: in  STD_LOGIC
+		);
+end component clk_wiz_0;
+
+----------------------------------------------------------------------------
+-- Clocking wizard signals
+----------------------------------------------------------------------------
+signal	CLK_100				: STD_LOGIC;		-- 100 MHz (clk_out1), for the UART / 7-seg / OLED / accel. CLK (clk_out2) is the CPU clock
+signal	clk_locked			: STD_LOGIC;		-- '1' once the clocking wizard outputs are stable
 
 ----------------------------------------------------------------------------
 -- UART Constants
@@ -292,7 +312,7 @@ LED(N_LEDs_OUT-1 downto 0) 	<= LED_OUT;	-- LED(7 downto 0) Memory-mapped writeab
 -- RESET_EXT <= not RESET; 				-- CPU_RESET (red button) is active low.
 RESET_EXT <= RESET; 					-- BTNU, active high.  
 RESET_EFF <= RESET_INT or RESET_EXT; 	-- Reset sent to the Wrapper
-RESET_INT <= '0'; 						-- internal reset, for future use.	
+RESET_INT <= not clk_locked; 			-- hold the CPU in reset until the clocking wizard has locked
 
 ----------------------------------------------------------------
 -- Accelerometer data aggregation
@@ -343,7 +363,7 @@ generic map (
         GREYSCALE => False,		-- color or greyscale ? (only for BPP>6)
         LEFT_SIDE => False)		-- True if the Pmod is on the left side of the board
 port map (
-		clk         	=>	CLK_undiv       ,	
+		clk         	=>	CLK_100         ,	
         reset       	=>	reset   		,    
         pix_write   	=> 	pix_write   	,
         pix_col     	=> 	pix_col     	,
@@ -372,7 +392,7 @@ generic map
 )
 port map
 (
-   SYSCLK => CLK_undiv,
+   SYSCLK => CLK_100,
    RESET => RESET_EXT,
    ACCEL_X => ACCEL_Data_X,
    ACCEL_Y => ACCEL_Data_Y,
@@ -394,7 +414,7 @@ generic map (
 		CLOCK_FREQUENCY     => CLOCK_FREQUENCY
 )
 port map (  
-		CLOCK		        => CLK_undiv,
+		CLOCK		        => CLK_100,
 		RESET               => RESET_EXT,
 		DATA_STREAM_IN      => uart_data_in,
 		DATA_STREAM_IN_STB  => uart_data_in_stb,
@@ -409,9 +429,9 @@ port map (
 ----------------------------------------------------------------
 -- UART
 ----------------------------------------------------------------
-UART_Process: process (CLK_undiv)
+UART_Process: process (CLK_100)
 begin
-if CLK_undiv'event and CLK_undiv = '1' then
+if CLK_100'event and CLK_100 = '1' then
 
    if RESET_EXT = '1' then
 		uart_data_in_stb        <= '0';
@@ -472,7 +492,7 @@ end process;
 ----------------------------------------------------------------
 -- Seven Segment Display
 ----------------------------------------------------------------
-SEVENSEG_DISPLAY_PROCESS : process(CLK_undiv)
+SEVENSEG_DISPLAY_PROCESS : process(CLK_100)
 type MEM_16x7 is array (0 to 15) of std_logic_vector (6 downto 0); -- Memory type declaration (Character map for 7-Seg)
 constant SevenSegHexMap : MEM_16x7 := ("0111111", "0000110", "1011011", "1001111", "1100110", "1101101", "1111101", "0000111", "1111111", "1100111", "1110111", "1111100", "0111001", "1011110", "1111001", "1110001"); 
 -- SevenSeg display cathode bits (active low)
@@ -487,7 +507,7 @@ constant SevenSegHexMap : MEM_16x7 := ("0111111", "0000110", "1011011", "1001111
 variable sevenseg_counter : std_logic_vector(18 downto 0) := (others => '0');
 variable indices : integer := 0;
 begin
-	if CLK_undiv'event and CLK_undiv = '1' then
+	if CLK_100'event and CLK_100 = '1' then
 		sevenseg_counter := sevenseg_counter+1;
 		indices := conv_integer(sevenseg_counter(18 downto 16) & "00");
 		SevenSegCat <= not(SevenSegHexMap(conv_integer(SevenSegHex(indices+3 downto indices))));
@@ -497,23 +517,16 @@ begin
 end process;
 	
 ----------------------------------------------------------------
--- Clock divider
+-- Clocking wizard: clk_out1 = 100 MHz for the peripherals, clk_out2 = CPU clock
 ----------------------------------------------------------------
-CLK_DIVIDER_OFF_SET: if CLK_DIV_BITS = 0 generate 
-	CLK <= CLK_undiv;
-end generate;
-CLK_DIVIDER_ON_SET: if CLK_DIV_BITS > 0 generate
-CLK_DIV_PROCESS : process(CLK_undiv)						-- Clock division
-variable clk_counter : std_logic_vector(CLK_DIV_BITS downto 0) := (others => '0');
-begin
-	if CLK_undiv'event and CLK_undiv = '1' then
-		if PAUSE = '0' then
-			clk_counter := clk_counter+1;
-			CLK <= clk_counter(CLK_DIV_BITS);
-		end if;
-	end if;
-end process;
-end generate;
+clk_wiz_inst : clk_wiz_0
+port map (
+		clk_in1				=>	CLK_undiv		,
+		clk_out1			=>	CLK_100			,
+		clk_out2			=>	CLK				,
+		reset				=>	'0'				,
+		locked				=>	clk_locked
+);
 
 end arch_TOP;
 

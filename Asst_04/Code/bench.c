@@ -24,11 +24,16 @@
 #ifndef CLK_DIV_BITS
 #define CLK_DIV_BITS 1
 #endif
-// TOP_Nexys.vhd takes the CPU clock from bit CLK_DIV_BITS of a counter, so it divides 100 MHz
-// by 2^(CLK_DIV_BITS + 1). CLK_DIV_BITS = 0 bypasses the counter. E.g. 1 -> 25 MHz, 5 -> 1.5625 MHz
+
+// Using clocking wizard, gives CPU clock period in ps instead
+#ifdef CLK_PERIOD_PS
+// CPU CLOCK computed by compiler, given by flag -DCLK_PERIOD_PS
+#define CLK_HZ ((unsigned int)(1000000000000ULL / CLK_PERIOD_PS))
+#else
 #define CLK_SHIFT ((CLK_DIV_BITS == 0) ? 0 : (CLK_DIV_BITS + 1))
-#define CLK_HZ (100000000 >> CLK_SHIFT) // CPU clock
-#define NS_PER_CYCLE (10 << CLK_SHIFT)  // 10 ns at 100 MHz, doubles for every divide by 2
+#define CLK_HZ (100000000 >> CLK_SHIFT)    // CPU clock
+#define CLK_PERIOD_PS (10000 << CLK_SHIFT) // 10ns at 100MHz
+#endif
 
 #ifdef SIM
 #define POLL_CYCLES 100 // Small delay for simulation
@@ -164,7 +169,7 @@ int main()
                         pass = pass && (fib_rec(n) == check);
                 }
 
-                unsigned int time_ns = cycles * NS_PER_CYCLE;
+                unsigned int time_ns = cycles * (CLK_PERIOD_PS / 1000) + cycles * (CLK_PERIOD_PS % 1000) / 1000;
                 unsigned int time_us = time_ns / 1000;
 
                 // LED0 = pass, LED1 = fail, LED3-2 = workload
