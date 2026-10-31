@@ -64,6 +64,7 @@ Asst_04/
 - `Decoder.v`
    - Implements the Decoder logic for mulh, mulhu, rem and remu.
 - `RV.v`
+   - Selects the appropriate MCycle output based on decoder control signals: lower or upper product for multiplication, and quotient or remainder for division.
    - Supports `lb` / `lbu` / `lh` / `lhu` through byte/half-word selection and sign/zero extension in Writeback.
    - Supports `sb` / `sh` through store-data alignment and byte write enables.
    - Implements a five-stage pipeline: Fetch, Decode, Execute, Memory and Writeback.
@@ -71,6 +72,8 @@ Asst_04/
    - Handles load-use hazards by holding Fetch and Decode and inserting a bubble into Execute.
    - Holds Fetch, Decode and Execute while the multicycle unit is busy.
    - Integrates branch prediction and redirects the PC and flushes wrong-path instructions on a misprediction.
+- `MCycle.v`
+  - Provides the upper 32 bits of the multiplication result for `mulh` / `mulhu`, and the remainder for `rem` / `remu`.
 - `Branch_Prediction.v`
    - Predicts the next PC in the Fetch stage, using a 64-entry branch target buffer with 2-bit counters
 - `TOP_Nexys.vhd`
