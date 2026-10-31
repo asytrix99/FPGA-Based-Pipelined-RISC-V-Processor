@@ -1,7 +1,7 @@
 # CG3207 Assignment 4
 
 
-## Folder structures
+## Folder structure
 ```text
 Asst_04/
 │
@@ -27,7 +27,7 @@ Asst_04/
 │
 ├── Test_bench/
 │   ├── tb_ALU.v
-│   ├── tb_Branch_Prediciton.v
+│   ├── tb_Branch_Predicition.v
 │   ├── tb_Decoder.v
 │   ├── tb_MCycle.v
 │   ├── tb_MCycle_self_checking.v
@@ -64,11 +64,13 @@ Asst_04/
 - `Decoder.v`
    - Implements the Decoder logic for mulh, mulhu, rem and remu.
 - `RV.v`
-   - `lb` / `lbu` / `lh` / `lhu` support through byte selection on `ReadData_W`
-   - `sb` / `sh` support through byte enables on `MemWrite_out`
-   - 5-stage pipeline (Fetch, Decode, Execute, Memory, Writeback) with pipeline registers between stages
-   - Hazard unit: forwarding from M / W into E, load-use stall, flush on mispredicted branch / jump, stall while MCycle is busy
-   - Hook Branch_Prediction
+   - Supports `lb` / `lbu` / `lh` / `lhu` through byte/half-word selection and sign/zero extension in Writeback.
+   - Supports `sb` / `sh` through store-data alignment and byte write enables.
+   - Implements a five-stage pipeline: Fetch, Decode, Execute, Memory and Writeback.
+   - Implements M-to-E, W-to-E, W-to-D and W-to-M forwarding.
+   - Handles load-use hazards by holding Fetch and Decode and inserting a bubble into Execute.
+   - Holds Fetch, Decode and Execute while the multicycle unit is busy.
+   - Integrates branch prediction and redirects the PC and flushes wrong-path instructions on a misprediction.
 - `Branch_Prediction.v`
    - Predicts the next PC in the Fetch stage, using a 64-entry branch target buffer with 2-bit counters
 - `TOP_Nexys.vhd`
@@ -94,7 +96,7 @@ Asst_04/
 
 ### Others
 - #### `Enhancement.pptx`
-    A powerpoint slides to demonstrate enhancement
+    Presentation slides describing the implemented enhancements.
 
 ## Benchmark Program
 `bench.c` runs one of 4 workloads, chosen by the DIP switches. Each one stresses a different pipeline hazard,
