@@ -3,13 +3,14 @@
 
 ## Folder structures
 ```text
-CG3207_Assignment_2/
+Asst_04/
 │
 ├── Src/
 │   ├── AA_DMEM.mem
 │   ├── AA_IROM.mem
 │   ├── ADXL362Ctrl.vhd
 │   ├── ALU.v
+│   ├── Branch_Prediction.v
 │   ├── Decoder.v
 │   ├── Extend.v
 │   ├── MCycle.v
@@ -26,14 +27,13 @@ CG3207_Assignment_2/
 │
 ├── Test_bench/
 │   ├── tb_ALU.v
+│   ├── tb_Branch_Prediciton.v
 │   ├── tb_Decoder.v
 │   ├── tb_MCycle.v
 │   ├── tb_MCycle_self_checking.v
 │   ├── tb_PC_Logic.v
 │   ├── tb_RV.v
-│   ├── test_Wrapper.v
-│   ├── test_Wrapper_DIP_to_LED.v
-│   └── test_Wrapper_DIP_to_LED_self_checking.v
+│   └── test_Wrapper.v
 │
 ├── Code/
 │   ├── bench.c
@@ -46,8 +46,16 @@ CG3207_Assignment_2/
 │   ├── booth_visualizer.html
 │   └── prompt.md
 │
-├── Bitstream/
-│   └── Top.bit
+├── Asst3 Mem Files/
+│
+├── Timing Reports/
+│   ├── TOP_timing_summary_routed_non-pipelined.rpt
+│   ├── TOP_timing_summary_routed_pipelined_no_prediction.rpt
+│   └── TOP_timing_summary_routed_pipelined_prediction.rpt
+│
+├── bitstream/
+│   ├── asst_03/
+│   └── asst_04/
 │
 ├── Constraint/
 │   ├── Nexys-A7-100T-Master.xdc
@@ -56,7 +64,7 @@ CG3207_Assignment_2/
 │
 ├── radix2-booth.pptx
 │
-└── README.txt
+└── README.md
 ```
 
 ## Files changed
@@ -67,8 +75,10 @@ CG3207_Assignment_2/
 - `RV.v`
    - Hook MCycle module and delay PC update when busy
    - 5-stage pipeline (Fetch, Decode, Execute, Memory, Writeback) with pipeline registers between stages
-   - Hazard unit: forwarding from M / W into E, load-use stall, flush on taken branch / jump, stall while MCycle is busy
+   - Hazard unit: forwarding from M / W into E, load-use stall, flush on mispredicted branch / jump, stall while MCycle is busy
    - `sb` / `sh` support through byte enables on `MemWrite_out`
+- `Branch_Prediction.v`
+   - Predicts the next PC in the Fetch stage, using a 64-entry branch target buffer with 2-bit counters
 - `MCycle.v`
    - Implement Division logic and Radix 2 booth multiplier for enchancement
 - `Wrapper.v`
@@ -77,6 +87,8 @@ CG3207_Assignment_2/
    - CPU clock from the Clocking Wizard (`clk_wiz_0`) instead of the clock divider. See [Clock](#clock)
 
 ### Testbench Files
+- `tb_Branch_Prediciton`
+    - Test bench for Branch_Prediction.v
 - `tb_Decoder`
     - Implement self-checking simulation for Decoder to check mul and div
 - `tb_MCycle_self_checking`
@@ -88,8 +100,8 @@ CG3207_Assignment_2/
 
 ### Software
 - #### `bench.c`
-    C benchmark used for the Assignment 4 demonstration, to compare the single-cycle and the pipelined CPU.
-    See [Benchmark Program](#benchmark-program).
+    C benchmark used for the Assignment 4 demonstration, to compare the single-cycle CPU and the pipelined CPU with
+    branch prediction. See [Benchmark Program](#benchmark-program).
 
 - #### `bench.asm`
     RISC-V assembly generated from `bench.c` using [Godbolt Compiler Explorer](https://godbolt.org/) with
@@ -97,8 +109,8 @@ CG3207_Assignment_2/
     are emitted as `.zero N`, which is replaced by `.space N` for RARS.
 
 - #### `bench_results.md`
-    Board measurements of `bench.c` on the single-cycle and the pipelined CPU: cycle counts, f_max, and time with
-    the Clocking Wizard.
+    Board measurements of `bench.c` on the single-cycle CPU at 40 MHz and the pipelined CPU with branch prediction at
+    50 MHz: cycle counts, timing and time. Also compares the pipelined CPU with the predictor on and off.
 
 - #### `accel.c`
     C program used for the processor demonstration. Reads and processes acceleromter data and outputs
@@ -132,7 +144,7 @@ the workload, so the same program can be compared on the single-cycle and the pi
 
 | SW1-SW0 | Workload | Stresses |
 |---|---|---|
-| 0 | `FIBI` iterative Fibonacci | back-to-back dependent adds (forwarding), loop branches (flush) |
+| 0 | `FIBI` iterative Fibonacci | back-to-back dependent adds (forwarding), loop branches (prediction) |
 | 1 | `FIBR` recursive Fibonacci | `jal` / `jalr`, stack loads and stores (load-use stall) |
 | 2 | `FIBT` Fibonacci table in data memory | store then load of the same data |
 | 3 | `PRIM` prime count by trial division | `mul` and `remu` on MCycle (stall) |
@@ -142,7 +154,7 @@ the workload, so the same program can be compared on the single-cycle and the pi
 - **SW15:** seven-segment display shows the result (off) or the time in us (on), in decimal
 - **Pushbuttons:** run again. The benchmark also runs at start-up and whenever a switch changes
 - **LEDs:** LED0 = PASS, LED1 = FAIL, LED3-2 = workload
-- **UART:** one line per run, e.g. `FIBI N=39 R=63245986 CYC=1139 NS=17085 PASS` (pipelined, 66.667 MHz)
+- **UART:** one line per run, e.g. `FIBI N=39 R=63245986 CYC=820 NS=16400 PASS` (pipelined with branch prediction, 50 MHz)
 
 Only `int` data is used, so there are no `sb` / `sh` and the program also runs on the Assignment 3 CPU.
 
@@ -158,13 +170,13 @@ Vivado project (IP Catalog > Clocking Wizard) with:
 - **`clk_out1`:** 100 MHz, for the UART, seven-segment display, OLED and accelerometer
 - **`clk_out2`:** the CPU clock, from the table below
 
-`clk_out2` is the fastest clock below the CPU's f_max that divides evenly into 100 MHz, so that the paths between
-the CPU and the peripherals also meet timing. Compile `bench.c` with the matching period, so that `NS=` is correct:
+Both builds meet timing at these clocks, including the paths between the CPU and the peripherals. Compile `bench.c`
+with the matching period, so that `NS=` is correct:
 
 | CPU | `clk_out2` | Godbolt compiler options |
 |---|---|---|
 | Single-cycle (Assignment 3) | 40 MHz | `-DCLK_PERIOD_PS=25000` |
-| Pipelined | 66.667 MHz | `-DCLK_PERIOD_PS=15000` |
+| Pipelined with branch prediction | 50 MHz | `-DCLK_PERIOD_PS=20000` |
 
 Without `CLK_PERIOD_PS`, `bench.c` falls back to `CLK_DIV_BITS` (default 1, 25 MHz) for the old clock divider,
 where the CPU clock is 100 MHz / 2^(CLK_DIV_BITS + 1), or 100 MHz when `CLK_DIV_BITS` = 0.
