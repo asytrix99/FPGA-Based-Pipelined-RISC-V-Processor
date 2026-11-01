@@ -27,7 +27,7 @@ Asst_04/
 │
 ├── Test_bench/
 │   ├── tb_ALU.v
-│   ├── tb_Branch_Predicition.v
+│   ├── tb_Branch_Prediciton.v
 │   ├── tb_Decoder.v
 │   ├── tb_MCycle.v
 │   ├── tb_MCycle_self_checking.v
@@ -40,14 +40,8 @@ Asst_04/
 │   ├── bench.asm
 │   └── bench_results.md
 │
-│
-├── Timing Reports/
-│   ├── TOP_timing_summary_routed_non-pipelined.rpt
-│   ├── TOP_timing_summary_routed_pipelined_no_prediction.rpt
-│   └── TOP_timing_summary_routed_pipelined_prediction.rpt
-│
-├── bitstream/
-│   └── Top.bit
+├── Bitstream/
+│   └── TOP.bit
 │
 ├── Constraint/
 │   ├── Nexys-A7-100T-Master.xdc
@@ -94,12 +88,12 @@ Asst_04/
     are emitted as `.zero N`, which is replaced by `.space N` for RARS.
 
 - #### `bench_results.md`
-    Board measurements of `bench.c` on the single-cycle CPU at 40 MHz and the pipelined CPU with branch prediction at
-    50 MHz: cycle counts, timing and time. Also compares the pipelined CPU with the predictor on and off.
+    Board measurements of `bench.c` on the single-cycle CPU at 25 MHz and the pipelined CPU with branch prediction at
+    50 MHz: cycle counts, timing and time. Also compares the pipelined CPU with and without the predictor.
 
 ### Others
 - #### `Enhancement.pptx`
-    Presentation slides describing the implemented enhancements.
+    Presentation slides describing the implemented enhancements and their benchmark results.
 
 ## Benchmark Program
 `bench.c` runs one of 4 workloads, chosen by the DIP switches. Each one stresses a different pipeline hazard,
@@ -120,12 +114,6 @@ the workload, so the same program can be compared on the single-cycle and the pi
 - **LEDs:** LED0 = PASS, LED1 = FAIL, LED3-2 = workload
 - **UART:** one line per run, e.g. `FIBI N=39 R=63245986 CYC=820 NS=16400 PASS` (pipelined with branch prediction, 50 MHz)
 
-Only `int` data is used, so there are no `sb` / `sh` and the program also runs on the Assignment 3 CPU.
-
-> `_start()` must stay the first function in `bench.c`. It sets `sp` before `main()` builds its stack frame.
-> Setting `sp` inside `main()` is too late: the compiler may address `main`'s locals through `s0`, which is
-> computed from `sp` = 0, and the program then writes nothing to the outputs.
-
 ### Clock
 `TOP_Nexys.vhd` takes the CPU clock from a Clocking Wizard IP, which is not in the repository. Add it to the
 Vivado project (IP Catalog > Clocking Wizard) with:
@@ -134,13 +122,17 @@ Vivado project (IP Catalog > Clocking Wizard) with:
 - **`clk_out1`:** 100 MHz, for the UART, seven-segment display, OLED and accelerometer
 - **`clk_out2`:** the CPU clock, from the table below
 
-Both builds meet timing at these clocks, including the paths between the CPU and the peripherals. Compile `bench.c`
+Both pipelined builds meet timing at this clock, including the paths between the CPU and the peripherals. The
+single-cycle CPU (Assignment 3) uses the old clock divider instead of the Clocking Wizard. The divider's output is not
+declared as a clock, so implementation does not constrain the CPU paths, and declaring it afterwards shows hold failures
+from the 100 MHz logic into the CPU (see [`bench_results.md`](Code/bench_results.md#timing)). Compile `bench.c`
 with the matching period, so that `NS=` is correct:
 
-| CPU | `clk_out2` | Godbolt compiler options |
-|---|---|---|
-| Single-cycle (Assignment 3) | 40 MHz | `-DCLK_PERIOD_PS=25000` |
-| Pipelined with branch prediction | 50 MHz | `-DCLK_PERIOD_PS=20000` |
+| CPU | `RV.v` | CPU clock | Godbolt compiler options |
+|---|---|---|---|
+| Single-cycle (Assignment 3) | Just before commit `f2de654` | 25 MHz (`CLK_DIV_BITS` = 1) | `-DCLK_PERIOD_PS=40000` |
+| Pipelined without branch prediction | Just before commit `e6e0283` | 50 MHz | `-DCLK_PERIOD_PS=20000` |
+| Pipelined with branch prediction | `Src/RV.v` | 50 MHz | `-DCLK_PERIOD_PS=20000` |
 
 Without `CLK_PERIOD_PS`, `bench.c` falls back to `CLK_DIV_BITS` (default 1, 25 MHz) for the old clock divider,
 where the CPU clock is 100 MHz / 2^(CLK_DIV_BITS + 1), or 100 MHz when `CLK_DIV_BITS` = 0.
