@@ -248,7 +248,7 @@ main:
         j       .LBB1_41
 .LBB1_41:
         lw      a0, -88(s0)
-        li      a1, 25
+        li      a1, 20
         mul     a0, a0, a1
         sw      a0, -92(s0)
         lw      a0, -92(s0)
@@ -366,8 +366,8 @@ main:
 .LBB1_49:
         j       .LBB1_50
 .LBB1_50:
-        lui     a0, 488
-        addi    a0, a0, 1152
+        lui     a0, 610
+        addi    a0, a0, 1440
         call    delay
         j       .LBB1_1
 
@@ -903,7 +903,6 @@ delay:
         lw      s0, 8(sp)
         addi    sp, sp, 16
         ret
-
 .data
 CYCLECOUNT_ADDR:
         .word   4294901920

@@ -89,7 +89,7 @@ Asst_04/
 
 - #### `bench_results.md`
     Board measurements of `bench.c` on the single-cycle CPU at 25 MHz and the pipelined CPU with branch prediction at
-    50 MHz: cycle counts, timing and time. Also compares the pipelined CPU with and without the predictor.
+    50 MHz: cycle counts and execution time. Also compares the pipelined CPU with and without the predictor.
 
 ### Others
 - #### `Enhancement.pptx`
@@ -122,16 +122,12 @@ Vivado project (IP Catalog > Clocking Wizard) with:
 - **`clk_out1`:** 100 MHz, for the UART, seven-segment display, OLED and accelerometer
 - **`clk_out2`:** the CPU clock, from the table below
 
-Both pipelined builds meet timing at this clock, including the paths between the CPU and the peripherals. The
-single-cycle CPU (Assignment 3) uses the old clock divider instead of the Clocking Wizard. The divider's output is not
-declared as a clock, so implementation does not constrain the CPU paths, and declaring it afterwards shows hold failures
-from the 100 MHz logic into the CPU (see [`bench_results.md`](Code/bench_results.md#timing)). Compile `bench.c`
-with the matching period, so that `NS=` is correct:
+The pipelined CPUs use the Clocking Wizard to generate a 50 MHz CPU clock. The single-cycle CPU (Assignment 3) uses the original clock divider to generate a 25 MHz CPU clock. Compile `bench.c` with the matching clock period shown below so that the reported NS= value is correct:
 
-| CPU | `RV.v` | CPU clock | Godbolt compiler options |
+| CPU | CPU configuration | CPU clock | Godbolt compiler options |
 |---|---|---|---|
-| Single-cycle (Assignment 3) | Just before commit `f2de654` | 25 MHz (`CLK_DIV_BITS` = 1) | `-DCLK_PERIOD_PS=40000` |
-| Pipelined without branch prediction | Just before commit `e6e0283` | 50 MHz | `-DCLK_PERIOD_PS=20000` |
+| Single-cycle (Assignment 3) | Assignment 3 | 25 MHz (`CLK_DIV_BITS` = 1) | `-DCLK_PERIOD_PS=40000` |
+| Pipelined without branch prediction | `PrTakenF` forced to `1'b0` | 50 MHz | `-DCLK_PERIOD_PS=20000` |
 | Pipelined with branch prediction | `Src/RV.v` | 50 MHz | `-DCLK_PERIOD_PS=20000` |
 
 Without `CLK_PERIOD_PS`, `bench.c` falls back to `CLK_DIV_BITS` (default 1, 25 MHz) for the old clock divider,
