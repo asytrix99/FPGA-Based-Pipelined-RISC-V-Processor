@@ -5,7 +5,7 @@
 // 
 // Create Date: 10/31/2026 12:21:32 AM
 // Design Name: 
-// Module Name: tb_Branch_Prediciton
+// Module Name: tb_Branch_Prediction
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,7 +20,7 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module tb_Branch_Prediciton(
+module tb_Branch_Prediction(
 
     );
     parameter INDEX_BITS = 6;

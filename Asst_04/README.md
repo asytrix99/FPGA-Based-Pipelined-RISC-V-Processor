@@ -1,5 +1,6 @@
 # CG3207 Assignment 4
 
+See the [project overview](../README.md) and [build and simulation guide](../docs/BUILD.md).
 
 ## Folder structure
 ```text
@@ -27,20 +28,19 @@ Asst_04/
 │
 ├── Test_bench/
 │   ├── tb_ALU.v
-│   ├── tb_Branch_Prediciton.v
+│   ├── tb_Branch_Prediction.v
 │   ├── tb_Decoder.v
 │   ├── tb_MCycle.v
 │   ├── tb_MCycle_self_checking.v
 │   ├── tb_PC_Logic.v
-│   ├── tb_RV.v
-│   └── test_Wrapper.v
+│   └── tb_RV.v
 │
 ├── Code/
 │   ├── bench.c
 │   ├── bench.asm
 │   └── bench_results.md
 │
-├── Bitstream/
+├── bitstream/
 │   └── TOP.bit
 │
 ├── Constraint/
@@ -74,7 +74,7 @@ Asst_04/
    - CPU clock from the Clocking Wizard (`clk_wiz_0`) instead of the clock divider. See [Clock](#clock)
 
 ### Testbench Files
-- `tb_Branch_Prediciton`
+- `tb_Branch_Prediction`
     - Test bench for Branch_Prediction.v
 
 ### Software

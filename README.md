@@ -1,168 +1,59 @@
-# CG3207 Project
+# FPGA-Based Pipelined RISC-V Processor
 
-This repository contains the shared source files for the FPGA project.
+A five-stage, 32-bit RISC-V processor implemented in Verilog with VHDL board integration for an Artix-7 FPGA. Developed as a team project for NUS CG3207, extending the supplied processor framework from a single-cycle design to a pipelined implementation.
 
-> **Important:** Do not upload your entire Vivado project to this repository.
-> Ceate your own Vivado project locally and add the
-> source files from this repository.
+## Architecture
 
-## 1. Clone the Repository
-
-Clone the repository to your computer:
-
-```bash
-git clone https://github.com/fookang/CG3207
-cd https://github.com/fookang/CG3207
+```mermaid
+flowchart LR
+    F[Fetch] --> D[Decode] --> E[Execute] --> M[Memory] --> W[Writeback]
+    BP[64-entry branch target buffer\n2-bit prediction counters] --> F
+    E -->|Branch resolution and recovery| F
+    M -->|Forwarding| E
+    W -->|Forwarding| E
+    MC[Multicycle multiply/divide] <--> E
 ```
 
-## 2. Create a Vivado Project
+- Five pipeline stages with data forwarding, load-use stalls, and wrong-path instruction flushing.
+- Dynamic branch prediction using a 64-entry branch target buffer and 2-bit counters.
+- Multicycle arithmetic, including Booth signed multiplication, upper-product and remainder operations.
+- Byte, halfword, and word memory accesses, with byte write enables for partial stores.
+- FPGA integration with switches, LEDs, seven-segment output, and UART benchmark reporting.
 
-Open **Vivado** and select:
+## Measured performance
 
-**Create Project → Next**
+Board measurements compare the **50 MHz pipelined processor with prediction** against the **25 MHz single-cycle baseline**. These are configured operating clocks, not measured maximum clock frequencies.
 
-Choose a location for your Vivado project.
+| Workload | Input | Single-cycle time | Pipelined + prediction time | Speedup |
+| --- | --- | --- | --- | --- |
+| Iterative Fibonacci | 39 | 27.76 µs | 16.40 µs | 1.69× |
+| Recursive Fibonacci | 24 | 132.04 ms | 77.23 ms | 1.71× |
+| Fibonacci table | 39 | 27.80 µs | 17.30 µs | 1.61× |
+| Prime counting | 1008 | 17.58 ms | 9.32 ms | 1.89× |
 
-Create the Vivado project **outside of this Git repository**
-so that Vivado-generated files are not accidentally committed.
+At the **same 50 MHz clock**, enabling branch prediction reduced execution cycles by **4.0–12.8%** for these inputs. The benchmark uses unoptimised (`-O0`) C; results depend on the workload and predictor state. See [full measurements and methodology](Asst_04/Code/bench_results.md).
+
+## Repository layout
+
+| Path | Contents |
+| --- | --- |
+| `Asst_04/Src/` | Verilog CPU, VHDL integration/peripherals, and memory images |
+| `Asst_04/Test_bench/` | CPU and component testbenches |
+| `Asst_04/Code/` | C benchmark, assembly, and recorded measurements |
+| `Asst_04/Constraint/` | Board-specific pin and clock constraints |
+| `Asst_04/bitstream/TOP.bit` | Previously generated demonstration bitstream |
+| `Asst_04/Enhancement.pptx` | Project presentation |
+| `scripts/` | Simulation runner |
 
 
-## 3. Select the FPGA
+## Build and verification
 
-When Vivado asks for the **Default Part**, select the **Parts** tab and use the
-following filters:
+See [FPGA setup and simulation](docs/BUILD.md) for source selection, board constraints, clock IP, and test commands. See the [assignment reference](Asst_04/README.md) for benchmark controls and clock configurations.
 
-| Setting | Value |
-|---|---|
-| Family | Artix-7 |
-| Package | csg324 |
-| Speed Grade | -1 |
+Run the automated Verilog checks from the repository root with Icarus Verilog installed:
 
-Select the following FPGA:
-
-```text
-xc7a100tcsg324-1
+```sh
+bash scripts/run_tests.sh
 ```
 
-This is the FPGA used by the **Nexys 4** board.
-
-Click **Next**, then **Finish**.
-
-## 4. Add the Source Files
-
-In Vivado, select:
-
-**Add Sources → Add or Create Design Sources**
-
-Add the required `.vhd` files from the cloned repository.
-
-When adding existing source files, **do not copy the files into your Vivado
-project**. The Vivado project should reference the files inside the Git
-repository.
-
-For example:
-
-```text
-FPGA-Git/
-└── src/
-    ├── top.vhd
-    ├── module_a.vhd
-    └── module_b.vhd
-```
-
-This ensures that when you edit a VHDL file in Vivado, Git can detect the
-changes.
-
-Add the constraint (`.xdc`) files in the same way using:
-
-**Add Sources → Add or Create Constraints**
-
-## 5. Working on a Feature
-
-Do not work directly on `main` or `develop`.
-
-Before starting your work, update `develop`:
-
-```bash
-git checkout asst2 
-git pull
-```
-
-Create your own branch:
-
-```bash
-git checkout -b feature/<feature-name>
-```
-
-For example:
-
-```bash
-git checkout -b feature/uart
-```
-
-Make your changes and test them in Vivado.
-
-When ready:
-
-```bash
-git add .
-git commit -m "Implement UART module"
-git push -u origin feature/uart
-```
-
-Then create a Pull Request on GitHub:
-
-```text
-feature/uart
-     |
-     v
-   asst2 
-```
-
-Do **not** create the Pull Request directly into `main`.
-
-## 6. Integration
-
-Individual features are merged into:
-
-```text
-feature/* ── PR ──> asst2
-```
-
-The `asst2` branch is used to integrate and test everyone's work.
-
-Once the complete FPGA design has been tested and is ready:
-
-```text
-asst2 ── PR ──> main
-```
-
-`main` should therefore contain the stable version of the project.
-
-## Branch Structure
-
-```text
-main
-  ^
-  |
-  | Final PR
-  |
-asst2
-  ^
-  |
-  +---- feature/module-a
-  |
-  +---- feature/module-b
-  |
-  +---- feature/module-c
-```
-
-## Important Rules
-
-- Do not push directly to `main`.
-- Do not push directly to `asst2`.
-- Create a separate branch for your work.
-- Create a Pull Request into `asst2` when your work is ready.
-- Do not commit Vivado-generated project files.
-- Only commit source files, constraints, and other files required by the team.
-- Make sure your design works in Vivado before creating a Pull Request.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.

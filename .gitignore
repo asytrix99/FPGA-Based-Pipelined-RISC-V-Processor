@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+._*
+
+# Simulation outputs
+*.vvp
+*.vcd
+*.fst
+
+# Vivado-generated files (keep HDL, constraints, and memory images)
+.Xil/
+*.cache/
+*.runs/
+*.sim/
+*.hw/
+*.ip_user_files/
+*.gen/
+*.jou
+*.log
+*.str
+*.wdb
+*.pb
+*.dcp
+*.xpr
+
+# Local build directory
+/build/
