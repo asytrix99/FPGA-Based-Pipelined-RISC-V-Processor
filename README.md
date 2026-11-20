@@ -5,14 +5,28 @@ A five-stage, 32-bit RISC-V processor implemented in Verilog with VHDL board int
 ## Architecture
 
 ```mermaid
-flowchart LR
-    F[Fetch] --> D[Decode] --> E[Execute] --> M[Memory] --> W[Writeback]
-    BP[64-entry branch target buffer\n2-bit prediction counters] --> F
-    E -->|Branch resolution and recovery| F
-    M -->|Forwarding| E
-    W -->|Forwarding| E
-    MC[Multicycle multiply/divide] <--> E
+flowchart TB
+    BP["Branch prediction<br/>64-entry branch target buffer<br/>2-bit prediction counters"]
+    F["1. Fetch"]
+    D["2. Decode"]
+    E["3. Execute"]
+    M["4. Memory"]
+    W["5. Writeback"]
+    MC["Multicycle unit<br/>Multiply / divide"]
+
+    BP -->|Predicted next PC| F
+    F --> D
+    D --> E
+    E --> M
+    M --> W
+
+    E -.->|Branch recovery| F
+    M -.->|Forwarding| E
+    W -.->|Forwarding| E
+    MC <--> E
 ```
+
+The five pipeline stages run from top to bottom. Dashed arrows show branch recovery and data forwarding paths.
 
 - Five pipeline stages with data forwarding, load-use stalls, and wrong-path instruction flushing.
 - Dynamic branch prediction using a 64-entry branch target buffer and 2-bit counters.
